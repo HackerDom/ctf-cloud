@@ -1,4 +1,4 @@
-The VPN server is a core of CTF network. It routes trafic between team routers of every team. In the cloud setup, these team routers set up automaticaly.
+            The VPN server is a core of CTF network. It routes trafic between team routers of every team. In the cloud setup, these team routers set up automaticaly.
 
 ### Pre-requirements ###
 
@@ -23,12 +23,9 @@ To be able to migrate to another VPN server in case of problems, the server must
 
 #### Generate Configs ####
 
-To generate configs, execute
+To generate configs, execute: ```./init.sh <vpn_ip> <vpn_domain>```
 
-```./init.sh <vpn_ip> <vpn_domain>```
-
-For example:
-```./init.sh 146.190.16.194 'vpn.ructf.org'```
+For example: ```./init.sh 146.190.16.194 'vpn.ructf.org'```
 
 The script patches ip in 'inventory.cfg' file and domain name in 'gen/gen_conf_client_prod.py' file.
 
@@ -36,9 +33,7 @@ After that, it generates VPN configs for both server and client and copies serve
 
 #### Deploy VPN Role ####
 
-To deploy VPN role, run
-
-```ansible-playbook vpn.yaml```
+To deploy VPN role, run ```ansible-playbook vpn.yaml```
 
 This command will set up the remote server.
 
@@ -46,27 +41,15 @@ This command will set up the remote server.
 
 Some actions are needed after deploying to initialize the host state.
 
-Log in with ssh to the host as root user and execute:
+Log in with ssh to the host as root user and execute this command to close the communication between teams: ```./openclosenetwork/close_network.sh```
 
-```./openclosenetwork/close_network.sh```
+```./snat/add_snat_rules.sh```. This commands add rules for source NAT and tunes parameters in Linux kernel for high-performace NAT on multicore servers. The source NAT hides the source IP from teams to make harder for them to filter checksystem by IP.
 
-This command will close the communication between teams.
-
-```./snat/add_snat_rules.sh```
-
-This commands add rules for source NAT and set tunes parameters in Linux kernel for high-performace NAT on servers with many cores.
-
-The source NAT hides the source IP from teams to make harder for them to filter checksystem by IP.
-
-```./trafdump/add_trafdump_rules.sh```
-
-This command turns on the traffic recording. The traffic is recorded to /home/dump/big in compressed form.
+```./trafdump/add_trafdump_rules.sh``` This command turns on the traffic recording. The traffic is recorded to /home/dump/big in compressed form.
 
 ### Testing the VPN ###
 
-To test VPN, execute this command on the host where configs were generated:
-
-```openvpn gen/client_prod/42.conf```
+To test VPN, execute this command on the host where configs were generated: ```openvpn gen/client_prod/42.conf```
 
 After that you should ping 10.80.42.1 address. Connection to any TCP-port on this address should give the "The network is closed" message. This can be check with browser or with ```nc 10.80.42.1 42``` command.
 
@@ -74,34 +57,18 @@ After that you should ping 10.80.42.1 address. Connection to any TCP-port on thi
 
 Here are some useful commands to be run on the VPN host.
 
-To open the network, execute
+To open the network, execute ```./openclosenetwork/open_network.sh```
 
-```./openclosenetwork/open_network.sh```
+To check the network state (open/closed) use: ```./openclosenetwork/check_network.sh```
 
-To check the network state (open/closed) use:
+To temporary disable SNAT: ```./snat/del_snat_rules.sh```
 
-```./openclosenetwork/check_network.sh```
+To check SNAT (enabled/disabled) ```./snat/check_snat_rules.sh```
 
-To temporary disable SNAT:
+To temporary ban the team 42 for flooding the network: ```./antidos/block_team.sh 42``` The team will get message "Please, stop the flood attack on the game network." on every tcp connection.
 
-```./snat/del_snat_rules.sh```
+To unban it: ```./antidos/unblock_team.sh 42```
 
-To check SNAT (enabled/disabled)
-
-```./snat/check_snat_rules.sh```
-
-To temporary ban the team 42 for flooding the network:
-
-```./antidos/block_team.sh 42```
-
-The team will get message "Please, stop the flood attack on the game network." on every tcp connection.
-
-To unban it:
-
-```./antidos/unblock_team.sh 42```
-
-To the the list of blocked teams in iptables-style format:
-
-```./antidos/list_blocked_teams.sh```
+To the the list of blocked teams in iptables-style format: ```./antidos/list_blocked_teams.sh```
 
 It is recommended to read the source of all these scripts to understand how they work.
