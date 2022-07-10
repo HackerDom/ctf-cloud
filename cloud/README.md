@@ -51,8 +51,10 @@ The team tokens are in "gen/tokens_prod" directory. They should be sent to parti
 
 The cloud is accessed by the browser with https protocol, so it need a valid certificates. The easiest way to obtain them is to log in on the cloud host with ssh, make sure that its domain name resolves to its IP address, and execute these commands, replacing cloud.ructf.org with your domain:
 
-```apt update && apt install certbot
-certbot -d cloud.ructf.org certonly```
+```
+apt update && apt install certbot
+certbot -d cloud.ructf.org certonly
+```
 
 Now copy the contents of file /etc/letsencrypt/archive/<your_domain>/fullchain1.pem from remote host to cloud_master/files/nginx/cert_cloud.pem on your local machine and file /etc/letsencrypt/archive/<your_domain>/privkey1.pem to cloud_master/files/nginx/key_cloud.pem.
 
