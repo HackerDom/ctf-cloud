@@ -62,6 +62,36 @@ The last thing to do for the webserver is to set up the password for cloud conso
 ```htpasswd -c cloud cloud_master/files/apache2/htpasswd```
 
 
+#### Deploy Router Host ####
+
+Both team VMs: vulnerable VM and router VM are deployed from snapshots, so the snapshots have to be created first. The snapshot for router is made only once.
+
+The router host should be created as a s-1vcpu-1gb (1 CPU and 1 GB RAM) droplet in AMS3 zone. Enter these commands to configure it:
+
+```
+apt update && apt upgrade -y
+apt install -y openvpn iptables-persistent net-tools
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+iptables-save > /etc/iptables/rules.v4
+
+echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf
+echo 'net.nf_conntrack_max=524288' >> /etc/sysctl.conf
+echo 'net.netfilter.nf_conntrack_max=524288' >> /etc/sysctl.conf
+sysctl -p
+
+sed -i 's/#Port 22/Port 2222/' /etc/ssh/sshd_config
+systemctl restart sshd
+
+shutdown -P now
+```
+
+To connect with SSH to this VM again in future, use port 2222 instead of 22.
+
+After poweroff, use the Digital Ocean console to make the snapshot of this VM.
+
+The ID of snapshot can be obtained with ```python3 cloud_master/files/api_srv/list_all_snapshots.py```. This ID will be needed on next steps.
+
+
 #### Deploy Cloud Master Role ####
 
 To deploy Cloud master role, run ```ansible-playbook cloud_master.yaml```
@@ -72,7 +102,7 @@ This command will set up the remote server.
 
 Before the game, the init state directory should be renamed or copied to db directory on the cloud master host. This was made to prevent db corruption on ansible runs: ```rsync -a /cloud/backend/db_init_state_prod/ /cloud/backend/db```
 
-```
+
 
 #### Administering the Cloud on the Game ####
 
