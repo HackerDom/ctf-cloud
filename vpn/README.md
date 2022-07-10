@@ -1,4 +1,4 @@
-            The VPN server is a core of CTF network. It routes trafic between team routers of every team. In the cloud setup, these team routers set up automaticaly.
+The VPN server is a core of CTF network. It routes trafic between team routers of every team. In the cloud setup, these team routers set up automaticaly.
 
 ### Pre-requirements ###
 
