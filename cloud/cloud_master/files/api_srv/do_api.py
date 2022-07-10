@@ -462,3 +462,36 @@ def delete_snapshot(snapshot_id, attempts=10, timeout=20):
             log("delete_snapshot trying again %s" % (e,))
         time.sleep(timeout)
     return False
+
+
+def get_ssh_keys(attempts=5, timeout=10):
+    keys = {}
+    url = "https://api.digitalocean.com/v2/account/keys?per_page=200"
+
+    cur_attempt = 1
+
+    while True:
+        try:
+            resp = requests.get(url, headers=HEADERS)
+            if not str(resp.status_code).startswith("2"):
+                log(resp.status_code, resp.headers, resp.text)
+                raise Exception("bad status code %d" % resp.status_code)
+
+            data = json.loads(resp.text)
+
+            for ssh_key in data["ssh_keys"]:
+                keys[ssh_key["id"]] = ssh_key["name"]
+
+            if ("links" in data and "pages" in data["links"] and
+                                    "next" in data["links"]["pages"]):
+                url = data["links"]["pages"]["next"]
+            else:
+                break
+
+        except Exception as e:
+            log("get_ssh_keys trying again %s" % (e,))
+            cur_attempt += 1
+            if cur_attempt > attempts:
+                return None  # do not return parts of the output
+            time.sleep(timeout)
+    return keys

@@ -27,6 +27,8 @@ After obtaining the token, the command ```echo 'TOKEN = "dop_v1_XXXXXXXXXXXXXXXX
 
 To communicate with team routers, the SSH key pair is needed. it can be created with the following command: ```ssh-keygen -N "" -f cloud_master/files/api_srv/do_deploy_key```. The public key and the private key will be created, the public key should be added to Digital Ocean using this page: https://cloud.digitalocean.com/account/security.
 
+To test the token and get ssh key ids, execute ```python3 cloud_master/files/api_srv/list_ssh_keys.py```. The key id will be needed in the next steps.
+
 
 #### Generate Configs ####
 
