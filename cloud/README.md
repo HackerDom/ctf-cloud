@@ -157,3 +157,7 @@ Some useful commands, for team 10 (to use them on other teams replace 10 with so
 The cloud console webserver error logs are available on /var/log/apache2/error.log. They contain commands entered by teams and their status.
 
 The database for team is available in /cloud/backend/db/teamX directory, where X is the team number. The tasks.log file contains information about all tasks initiated by the team, the detailed log about every operation is available in files like task_create_vm.out, where create_vm is the action name.
+
+#### After The Game ####
+
+Do not forget to remove all vms created for teams and their snapshots to prevent overbilling.
