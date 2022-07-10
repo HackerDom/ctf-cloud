@@ -36,20 +36,19 @@ To generate configs, execute: ```./init_cloud.sh <vpn_ip> <vpn_domain>```
 
 For example: ```./init_cloud.sh 188.166.118.28 cloud.ructf.org```
 
-The script patches ip in 'inventory.cfg' file and domain name in 'cloud_master/files/api_srv/cloud_common.py', in gen/gen_conf_client_entergame_prod.py, in cloud_master/files/wsgi/cloudapi.wsgi, in cloud_master/files/apache2/000-default.conf and cloud_master/files/nginx/cloud files.
+The script patches an IP address in 'inventory.cfg' file and domain name in 'cloud_master/files/api_srv/cloud_common.py', in gen/gen_conf_client_entergame_prod.py, in cloud_master/files/wsgi/cloudapi.wsgi, in cloud_master/files/apache2/000-default.conf and cloud_master/files/nginx/cloud files.
 
-This can take about 30 minutes.
 
 After that, it generates a directory with init cloud state and copies it in cloud_master/files/api_srv/db_init_state_prod. Every subdirectory in this directory contains cloud state for single team. The states of cloud, VPN configs, root password and its hash, hash of the team token.
 
-This directory should be renamed to "db" after the deploy.
+This directory should be renamed to "db" after the deploy. The proccess of config generation can take about 30 minutes.
 
 The team tokens are in "gen/tokens_prod" directory. They should be sent to participants before the game.
 
 
 #### Obtain the SSL Certificates ####
 
-The cloud is accessed by the browser with https protocol, so it need a valid certificates. The easiest way to obtain them is to log in on the cloud host with ssh, make sure that its domain name resolves to its IP address, and execute these commands, replacing cloud.ructf.org with your domain:
+The cloud is accessed by the browser with https protocol, so it need valid certificates. The easiest way to obtain them is to log in on the cloud host with SSH, make sure that its domain name resolves to its IP address, and execute these commands, replacing cloud.ructf.org with your domain:
 
 ```
 apt update && apt install certbot
@@ -94,6 +93,31 @@ After poweroff, use the Digital Ocean console to make the snapshot of this VM.
 The ID of snapshot can be obtained with ```python3 cloud_master/files/api_srv/list_all_snapshots.py```. This ID will be needed on next steps.
 
 
+#### Deploy Vurnerable Host ####
+
+The vurnerable host contains services for CTF. It is recommended to build it using packer software. The installation instructions is available on https://www.packer.io/downloads. The approximate command sequence is:
+
+```
+cd vuln_image
+packer init image.pkr.hcl
+packer build -var "api_token=dop_v1_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" image.pkr.hcl
+```
+
+The ID of snapshot can be obtained with ```python3 cloud_master/files/api_srv/list_all_snapshots.py```. This ID will be needed on next step.
+
+
+#### Specifying Image IDS ####
+
+In order to create VMs, the cloud needs to know the ids of router and vm images and SSH key id. They can be specified in cloud_master/files/api_srv/create_team_instance.py file. Example:
+
+```
+ROUTER_DO_IMAGE = 112309225
+VULNIMAGE_DO_IMAGE = 108811203
+DO_SSH_KEYS = [34519247]
+```
+
+Use the ids you've obtained on previous steps. Now the cloud is ready for deploy.
+
 #### Deploy Cloud Master Role ####
 
 To deploy Cloud master role, run ```ansible-playbook cloud_master.yaml```
@@ -110,4 +134,14 @@ Before the game, the init state directory should be renamed or copied to db dire
 
 Most scripts are in /cloud/backend directory on the cloud master server.
 
-To
+Some useful commands, for team 10 (to use them on other teams replace 10 with something else
+
+```
+./create_team_instance.py 10          # creates the vm and router
+./switch_team_net_to_not_cloud.py 10  # disconnects the team from the central router
+./delete_team_instance_vm.py 10       # deletes vulnerable vm (not recovable)
+./delete_team_instance_net.py 10      # deletes team router (not recovable)
+./reboot_vm.py 10                     # reboots vulnarable vm
+
+
+```
