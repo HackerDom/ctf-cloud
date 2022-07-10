@@ -128,7 +128,9 @@ This command will set up the remote server.
 
 Before the game, the init state directory should be renamed or copied to db directory on the cloud master host. This was made to prevent db corruption on ansible runs: ```rsync -a /cloud/backend/db_init_state_prod/ /cloud/backend/db```
 
+The web interface is protected by additional password, which guarantees that only orgs can enter the commands in the console. Just few minutes before the game starts, this password should be removed. This can be done by commenting "Require valid-user" and uncommenting "#Require all granted" lines in /etc/apache2/sites-enabled/000-default.conf file and executing ```systemctl restart apache2```
 
+Before removing the password the cloud should be in the initial state, if some test teams were created before the competition, they should be removed.
 
 #### Administering the Cloud on the Game ####
 
@@ -137,11 +139,21 @@ Most scripts are in /cloud/backend directory on the cloud master server.
 Some useful commands, for team 10 (to use them on other teams replace 10 with something else
 
 ```
-./create_team_instance.py 10          # creates the vm and router
-./switch_team_net_to_not_cloud.py 10  # disconnects the team from the central router
-./delete_team_instance_vm.py 10       # deletes vulnerable vm (not recovable)
-./delete_team_instance_net.py 10      # deletes team router (not recovable)
-./reboot_vm.py 10                     # reboots vulnarable vm
-
-
+./create_team_instance.py 10               # creates the vm and router
+./switch_team_net_to_not_cloud.py 10       # disconnects the team from the central router
+./switch_team_net_to_cloud.py 10           # connects the team to the central router
+./delete_team_instance_vm.py 10            # deletes vulnerable vm (not recovable)
+./delete_team_instance_net.py 10           # deletes team router (not recovable)
+./reboot_vm.py 10                          # reboots vulnerable vm
+./list_team_instances.py                   # get states of all VMs
+./check_cloud_state.py                     # compare the state in local db and DO state
+./list_snapshots.py 10                     # list snapshots for team
+./take_snapshot.py 10 somename             # take the snapshot
+./restore_vm_from_snapshot.py 10 somename  # restore from snapshot
 ```
+
+#### If Something Goes Wrong ####
+
+The cloud console webserver error logs are available on /var/log/apache2/error.log. They contain commands entered by teams and their status.
+
+The database for team is available in /cloud/backend/db/teamX directory, where X is the team number. The tasks.log file contains information about all tasks initiated by the team, the detailed log about every operation is available in files like task_create_vm.out, where create_vm is the action name.

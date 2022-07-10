@@ -18,7 +18,7 @@ import subprocess
 
 import do_api
 
-from cloud_common import (get_cloud_ip, log_progress,
+from cloud_common import (log_progress,
                           call_unitl_zero_exit, SSH_OPTS, SSH_DO_OPTS,
                           SSH_YA_OPTS, DOMAIN)
 
