@@ -23,9 +23,9 @@ To be able to migrate to another VPN server in case of problems, the server must
 
 #### Generate Configs ####
 
-To generate configs, execute: ```./init.sh <vpn_ip> <vpn_domain>```
+To generate configs, execute: ```./init_vpn.sh <vpn_ip> <vpn_domain>```
 
-For example: ```./init.sh 146.190.16.194 'vpn.ructf.org'```
+For example: ```./init_vpn.sh 146.190.16.194 'vpn.ructf.org'```
 
 The script patches ip in 'inventory.cfg' file and domain name in 'gen/gen_conf_client_prod.py' file.
 
