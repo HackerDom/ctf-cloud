@@ -41,7 +41,7 @@ The script patches an IP address in 'inventory.cfg' file and domain name in 'clo
 
 After that, it generates a directory with init cloud state and copies it in cloud_master/files/api_srv/db_init_state_prod. Every subdirectory in this directory contains cloud state for single team. The states of cloud, VPN configs, root password and its hash, hash of the team token.
 
-This directory should be renamed to "db" after the deploy. The proccess of config generation can take about 30 minutes.
+The directory "db_init_state_prod" should be renamed to "db" after the deploy. The proccess of config generation can take about 30 minutes.
 
 The team tokens are in "gen/tokens_prod" directory. They should be sent to participants before the game.
 
