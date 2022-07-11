@@ -11,17 +11,17 @@ is recommended. If you want to record the traffic, the server should have enough
 The server must have SSH up configured to accept the root user by key.
 
 The server must have connectivity to other infrastructure servers (checksystem, db, ...). For best performance, 
-all infrastructure servers should be in the same local network.
-
-For best performance the server should be in the same local network with the other infrastructure servers (checksystem)
+all infrastructure servers should be in the same local network. The infrastructure network is 10.10.10.0/24.
 
 ### Prepare ###
 
-To set up the VPN server you should have it created on some hosting.
+To set up the VPN server you should have it created on some hosting. The server must be able to reach other infrastructure services in 10.10.10.0/24 network. The simplest way to do it is to set up the hosting to use this network as a private network.
 
-To be able to migrate to another VPN server in case of problems, the server must have a domain name, for example vpn.ructf.org, which resolves to this server. To not depend on DNS caching time, the clients use random subdomain in this domain, so all subdomains, e.g aaa.bbb.vpn.ructf.org. So, the DNS should be set up to resolve any subdomain to this VPN server.
+To be able to migrate to another VPN server in case of problems, the server must have a domain name, for example vpn.ructf.org, which resolves to this server. To not depend on DNS caching time, the clients use random subdomain in this domain, so all subdomains should resolve to this IP, e.g aaa.bbb.vpn.ructf.org should point the VPN server IP.
 
 #### Generate Configs ####
+
+Clone the repository on you Linux host, it can be laptop or remote server.
 
 To generate configs, execute: ```./init_vpn.sh <vpn_ip> <vpn_domain>```
 
