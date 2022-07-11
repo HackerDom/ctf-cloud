@@ -20,7 +20,7 @@ except FileExistsError:
 
 for i in range(N):
 	keyname = "%d.key" % i
-	call([OPENVPN_PATH, "--genkey", "secret", keyname])
+	call([OPENVPN_PATH, "--genkey", "--secret", keyname])
 	if not os.path.isfile(keyname):
 		print("Failed to gen: %s" % keyname)
 		break
