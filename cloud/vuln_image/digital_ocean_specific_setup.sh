@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # Replace /24 netmask with /25 one

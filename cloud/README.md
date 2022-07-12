@@ -15,6 +15,8 @@ The server must have SSH up configured to accept the root user by key. The serve
 
 The account on Digital Ocean should be created and paid. The droplet limit should be not less than 2\*N + 10, where N is a maximum number of teams. For every team the vulnerable vm and the router vm are created.
 
+All VMs and other objects should be created in AMS3 zone. If you need prefer other zone, it can be set in cloud\_master/files/api\_srv/do\_api.py and vuln_image/image.pkr.hcl, just search for the ams3 string and replace it to prefered zone.
+
 ### Prepare ###
 
 To set up the VPN server you should have it created on some hosting.
@@ -67,7 +69,7 @@ The last thing to do for the webserver is to set up the password for cloud conso
 
 Both team VMs: vulnerable VM and router VM are deployed from snapshots, so the snapshots have to be created first. The snapshot for router is made only once.
 
-The router host should be created as a s-1vcpu-1gb (1 CPU and 1 GB RAM) droplet in AMS3 zone. Enter these commands to configure it:
+The router host should be created as a s-1vcpu-1gb (1 CPU and 1 GB RAM) droplet. Enter these commands to configure it:
 
 ```
 apt update && apt upgrade -y
@@ -102,6 +104,8 @@ cd vuln_image
 packer init image.pkr.hcl
 packer build -var "api_token=dop_v1_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" image.pkr.hcl
 ```
+
+This command builds a typical image with docker-compose and single service. Also the packer adapts the image for cloud: enables password authentication in SSH and sets apropriate network mask. The root password and the network address will be set automatically on the first run, if the distro is Ubuntu. For other distros some tweaks will be needed, see USERDATA\_TEMPLATE constant in cloud_master/files/api_srv/create_team_instance.py.
 
 The ID of snapshot can be obtained with ```python3 cloud_master/files/api_srv/list_all_snapshots.py```. This ID will be needed on next step.
 
