@@ -57,7 +57,7 @@ apt update && apt install certbot
 certbot -d cloud.ructf.org certonly
 ```
 
-Now copy the contents of file /etc/letsencrypt/archive/<your_domain>/fullchain1.pem from remote host to cloud_master/files/nginx/cert_cloud.pem on your local machine and file /etc/letsencrypt/archive/<your_domain>/privkey1.pem to cloud_master/files/nginx/key_cloud.pem.
+Now copy the contents of file ```/etc/letsencrypt/archive/<your_domain>/fullchain1.pem``` from remote host to ```cloud_master/files/nginx/cert_cloud.pem``` on your local machine and file ```/etc/letsencrypt/archive/<your_domain>/privkey1.pem``` to ```cloud_master/files/nginx/key_cloud.pem```.
 
 Also the file dhparams_cloud.pem should be generated. This can be done with a ```openssl dhparam -out cloud_master/files/nginx/dhparams_cloud.pem 4096``` command. This takes about 10 minutes.
 
@@ -138,7 +138,10 @@ The web interface is protected by additional password, which guarantees that onl
 
 Before removing the password the cloud should be in the initial state, if some test teams were created before the competition, they should be removed.
 
+The cloud console should be reachable with browser by domain name
+
 #### Administering the Cloud on the Game ####
+
 
 Most scripts are in /cloud/backend directory on the cloud master server.
 
