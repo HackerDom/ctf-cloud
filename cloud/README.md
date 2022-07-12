@@ -62,7 +62,7 @@ Now copy the contents of file ```/etc/letsencrypt/archive/<your_domain>/fullchai
 Also the file dhparams_cloud.pem should be generated. This can be done with a ```openssl dhparam -out cloud_master/files/nginx/dhparams_cloud.pem 4096``` command. This takes about 10 minutes.
 
 The last thing to do for the webserver is to set up the password for cloud console to protect it from team access before the competition starts:
-```htpasswd -c cloud cloud_master/files/apache2/htpasswd```
+```htpasswd -c cloud_master/files/apache2/htpasswd cloud```
 
 
 #### Deploy Router Host ####
