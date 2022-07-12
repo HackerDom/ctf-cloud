@@ -128,7 +128,7 @@ To deploy Cloud master role, run ```ansible-playbook cloud_master.yaml```
 
 This command will set up the remote server.
 
-The directory "db_init_state_prod" in cloud_master/files/api_srv should be renamed to "db" after the deploy on the remote host. This was made to protect database from accidental redeploy.
+The directory "db_init_state_prod" in /cloud/backend should be renamed to "db" after the deploy on the remote host. This was made to protect database from accidental redeploy.
 
 #### Preparing the Cloud for Game
 
