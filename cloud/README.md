@@ -43,7 +43,7 @@ The script patches an IP address in 'inventory.cfg' file and domain name in 'clo
 
 After that, it generates a directory with init cloud state and copies it in cloud_master/files/api_srv/db_init_state_prod. Every subdirectory in this directory contains cloud state for single team. The states of cloud, VPN configs, root password and its hash, hash of the team token.
 
-The directory "db_init_state_prod" should be renamed to "db" after the deploy. The proccess of config generation can take about 30 minutes.
+The proccess of config generation can take about 30 minutes.
 
 The team tokens are in "gen/tokens_prod" directory. They should be sent to participants before the game.
 
@@ -105,7 +105,7 @@ packer init image.pkr.hcl
 packer build -var "api_token=dop_v1_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" image.pkr.hcl
 ```
 
-This command builds a typical image with docker-compose and single service. Also the packer adapts the image for cloud: enables password authentication in SSH and sets apropriate network mask. The root password and the network address will be set automatically on the first run, if the distro is Ubuntu. For other distros some tweaks will be needed, see USERDATA\_TEMPLATE constant in cloud_master/files/api_srv/create_team_instance.py.
+This command builds a typical image with docker-compose and single service. It usually takes about 15 minutes. Also the packer prepares the image for cloud: enables password authentication in SSH and sets apropriate network mask. The root password and the network address will be set automatically on the first run, if the distro is Ubuntu. For other distros some tweaks will be needed, see USERDATA\_TEMPLATE constant in cloud_master/files/api_srv/create_team_instance.py.
 
 The ID of snapshot can be obtained with ```python3 cloud_master/files/api_srv/list_all_snapshots.py```. This ID will be needed on next step.
 
@@ -127,6 +127,8 @@ Use the ids you've obtained on previous steps. Now the cloud is ready for deploy
 To deploy Cloud master role, run ```ansible-playbook cloud_master.yaml```
 
 This command will set up the remote server.
+
+The directory "db_init_state_prod" in cloud_master/files/api_srv should be renamed to "db" after the deploy. This was made to protect database from accidental redeploy.
 
 #### Preparing the Cloud for Game
 
