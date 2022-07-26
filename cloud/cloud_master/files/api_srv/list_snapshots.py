@@ -46,7 +46,11 @@ def main():
             print("msg:", "no snapshots are created yet")
             return 0
 
-        good_snapshots.sort(key=lambda v: v.get("created_at", 0))
+        if "created_at" in good_snapshots[0]:
+            good_snapshots.sort(key=lambda v: v.get("created_at", 0))
+        if "createdAt" in good_snapshots[0]:
+            good_snapshots.sort(key=lambda v: v.get("createdAt", 0))
+
 
         for snapshot in good_snapshots:
             print("msg:", snapshot["name"][len(SNAPSHOT_PREFIX):])

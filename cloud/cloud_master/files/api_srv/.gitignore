@@ -1,4 +1,6 @@
 db
 slots
 do_token.py
+ya_token.py
+ya_token.txt
 do_deploy_key
