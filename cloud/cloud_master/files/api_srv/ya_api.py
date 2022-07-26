@@ -91,6 +91,8 @@ def call_api(method, url, json={}, ret_field=None, folder_id=FOLDER_ID, page_siz
             if "nextPageToken" in ans:
                 log("call_api %s %s: too many values warning, paging is no supported" % (method, url))
             if ret_field:
+                if ret_field not in ans:
+                    return []
                 ans = ans[ret_field]
             return ans
 

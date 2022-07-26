@@ -1,4 +1,4 @@
-The Cloud-server provides participants the console where they can do various actions with their vulnerable images: create, reboot, checkpoint and so on. The images are run in Digital Ocean. In addition to vulnerable image, for every team the special vm called team router is set up. This router contains the OpenVPN server allowing participants to enter the game network. Also the trafic between vulnerable image and game network flows through this router. Participants don't have SSH access to their router, but can connect or disconnect it from the game network using the cloud console.
+The Cloud-server provides participants the console where they can do various actions with their vulnerable images: create, reboot, checkpoint and so on. The images are run in Yandex Cloud. In addition to vulnerable image, for every team the special vm called team router is set up. This router contains the OpenVPN server allowing participants to enter the game network. Also the trafic between vulnerable image and game network flows through this router. Participants don't have SSH access to their router, but can connect or disconnect it from the game network using the cloud console.
 
 Participants authenticate in the console by tokens, so they should be sent to them somehow, for example, using email or telegram bots.
 
@@ -6,30 +6,30 @@ Participants authenticate in the console by tokens, so they should be sent to th
 
 To deploy Cloud server you should set up the VPN server first (see ../vpn). The client VPN configs should already be generated for connecting team routers to main VPN server.
 
-The Cloud server can be deployed to some Ubuntu 20.04 box. The server can be a dedicated server or virtual private server on some hosting like Digital Ocean.
+The Cloud server can be deployed to some Ubuntu 20.04 box. The server can be a dedicated server or virtual private server on some hosting like Yandex Cloud
 
 The server should have at least 8GB RAM and 4 CPU cores. For big competitions server with 32GB RAM and 8 CPU cores
 is recommended.
 
-The server must have SSH up configured to accept the root user by key. The server must have network connectivity to Digital Ocean API.
+The server must have SSH up configured to accept the root user by key. The server must have network connectivity to Yandex Cloud API.
 
-The account on Digital Ocean should be created and paid. The droplet limit should be not less than 2\*N + 10, where N is a maximum number of teams. For every team the vulnerable vm and the router vm are created.
+The account on Yandex Cloud should be created and paid. The vm limit should be not less than 2\*N + 10, where N is a maximum number of teams. Other limits should be increased as well. For every team the vulnerable vm and the router vm are created.
 
-All VMs and other objects should be created in AMS3 zone. If you need prefer other zone, it can be set in cloud\_master/files/api\_srv/do\_api.py and vuln_image/image.pkr.hcl, just search for the ams3 string and replace it to prefered zone.
+All VMs and other objects should be created in ru-central1-a zone. If you need prefer other zone, it can be set in cloud\_master/files/api\_srv/ya\_token.py and vuln_image/image.pkr.hcl, just search for the ru-central1-a string and replace it to prefered zone.
 
 ### Prepare ###
 
 To set up the VPN server you should have it created on some hosting.
 
-The Digital Ocean account must be set up to delegate some zone, like cloud.ructf.org. The A record should point on the Cloud box, other records will be created in this zone during the proccess of team image creation. The domain names are used in VPN configs that console gives to the participants to connect to their team router. The team router, in its turn, connects to the central VPN server using the configs that are were created previously.
+The Yandex Cloud account must be set up to delegate some zone, like cloud.ructf.org. The A record should point on the Cloud box, other records will be created in this zone during the proccess of team image creation. The domain names are used in VPN configs that console gives to the participants to connect to their team router. The team router, in its turn, connects to the central VPN server using the configs that are were created previously.
 
-To communicate with Digital Ocean API, you need the key, which can be created on Digital Ocean control panel (https://cloud.digitalocean.com/account/api/tokens). This key should be stored secretly and never be commited in git.
+To communicate with Yandex Cloud API, you need create the service user (https://console.cloud.yandex.ru/folders/your_folder_id?section=service-accounts), give him the rights, and create a private key for authorization.
 
-After obtaining the token, the command ```echo 'TOKEN = "dop_v1_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"' > cloud_master/files/api_srv/do_token.py``` should be executed with your token.
+After obtaining the token, copy file cloud\_master/files/api\_srv/ya\_token.py.example to cloud\_master/files/api\_srv/ya\_token.py and specify FOLDER\_ID, SERVICE\_ACCOUNT\_ID, KEY\_ID, ADMIN\_PUBLIC\_SSH\_KEY and PRIVATE\_KEY constants according to template. The identificators can be obtained using Yandex Cloud web-interface.
 
-To communicate with team routers, the SSH key pair is needed. it can be created with the following command: ```ssh-keygen -N "" -f cloud_master/files/api_srv/do_deploy_key```. The public key and the private key will be created, the public key should be added to Digital Ocean using this page: https://cloud.digitalocean.com/account/security.
+To communicate with team routers, the SSH key pair is needed. it can be created with the following command: ```ssh-keygen -N "" -f cloud_master/files/api_srv/cloud_deploy_key```. The public key and the private key will be created.
 
-To test the token and get ssh key ids, execute ```python3 cloud_master/files/api_srv/list_ssh_keys.py```. The key id will be needed in the next steps.
+To test the token execute ```python3 cloud_master/files/api_srv/list\_all\_snapshots.py```.
 
 
 #### Generate Configs ####
@@ -39,7 +39,6 @@ To generate configs, execute: ```./init_cloud.sh <vpn_ip> <vpn_domain>```
 For example: ```./init_cloud.sh 188.166.118.28 cloud.ructf.org```
 
 The script patches an IP address in 'inventory.cfg' file and domain name in 'cloud_master/files/api_srv/cloud_common.py', in gen/gen_conf_client_entergame_prod.py, in cloud_master/files/wsgi/cloudapi.wsgi, in cloud_master/files/apache2/000-default.conf and cloud_master/files/nginx/cloud files.
-
 
 After that, it generates a directory with init cloud state and copies it in cloud_master/files/api_srv/db_init_state_prod. Every subdirectory in this directory contains cloud state for single team. The states of cloud, VPN configs, root password and its hash, hash of the team token.
 
