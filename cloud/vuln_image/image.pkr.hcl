@@ -1,28 +1,27 @@
-packer {
-  required_plugins {
-    digitalocean = {
-      version = ">= 1.0.0"
-      source  = "github.com/hashicorp/digitalocean"
-    }
-  }
-}
-
 variable "api_token" {
   type = string
 }
 
-source "digitalocean" "vuln_image" {
-  droplet_name  = "ctf-{{timestamp}}"
-  snapshot_name = "ctf-{{timestamp}}"
-  api_token     = var.api_token
-  image         = "ubuntu-20-04-x64"
-  region        = "ams3"
-  size          = "s-4vcpu-8gb"
+source "yandex" "vuln_image" {
+  folder_id = "b1g3omd7tqchq59cd8np"
+  zone        = "ru-central1-a"
+  token     = var.api_token
+  image_family = "ctf-images"
+  image_name = "ctf-image-test"
+  source_image_family = "ubuntu-2004-lts"
   ssh_username  = "root"
+  use_ipv4_nat = true
+  instance_cores = 2
+  instance_mem_gb = 2
+  platform_id = "standard-v3"
+  disk_type = "network-ssd"
+  metadata = {
+    user-data = "#cloud-config\ndisable_root: false\n"
+  }
 }
 
 build {
-  sources = ["source.digitalocean.vuln_image"]
+  sources = ["source.yandex.vuln_image"]
 
   provisioner "shell" {
     inline_shebang = "/bin/sh -ex"
@@ -85,6 +84,6 @@ build {
 
   # Fix some internal digitalocean+cloud-init scripts to be compatible with our cloud infrastructure
   provisioner "shell" {
-    script = "digital_ocean_specific_setup.sh"
+    script = "yandex_cloud_specific_setup.sh"
   }
 }
