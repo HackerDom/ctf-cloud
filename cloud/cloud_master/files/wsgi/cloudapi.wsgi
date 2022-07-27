@@ -233,7 +233,7 @@ def cmd_get_vm_info(team, args):
 
         info["state"] = "running"
         info["external addr"] = "team%d.%s" % (team, DOMAIN)
-        info["internal addr"] = "10.%d.%d.3" % (60 + team//256, team%256)
+        info["internal addr"] = "10.%d.%d.4" % (60 + team//256, team%256)
         info["root passwd"] = root_passwd
         
     if team_state == "CLOUD":
