@@ -185,8 +185,9 @@ def main():
             return 1
 
         # UNCOMMENT BEFORE THE GAME
+        host_int_ip = "10.%d.%d.3" % (60 + TEAM//256, TEAM%256)
         dest = "10.%d.%d.4" % (60 + TEAM//256, TEAM%256)
-        cmd = ["iptables -t nat -A PREROUTING -d %s -p tcp " % ip +
+        cmd = ["iptables -t nat -A PREROUTING -d %s -p tcp " % host_int_ip +
                "--dport 22 -j DNAT --to-destination %s:22" % dest]
         ret = call_unitl_zero_exit(["ssh"] + SSH_YA_OPTS + [ip] + cmd)
         if not ret:
