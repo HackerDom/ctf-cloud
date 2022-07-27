@@ -34,6 +34,9 @@ def refresh_iam_token():
 
     encoded_token = jwt.encode(payload, PRIVATE_KEY[:], algorithm='PS256', headers={'kid': KEY_ID})
 
+    if hasattr(encoded_token, "decode"):
+        encoded_token = encoded_token.decode()
+
     resp = requests.post("https://iam.api.cloud.yandex.net/iam/v1/tokens", json={"jwt": encoded_token})
 
     if resp.status_code != 200:

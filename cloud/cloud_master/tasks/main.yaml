@@ -108,3 +108,13 @@
   with_items:
     - cloud_deploy_key
     - ya_token.py
+
+
+- name: ensure ya_token.txt file exists
+  copy:
+    content: ""
+    dest: /cloud/backend/ya_token.txt
+    force: no
+    group: cloud
+    owner: cloud
+    mode: 0600
