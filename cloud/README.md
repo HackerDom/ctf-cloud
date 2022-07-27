@@ -25,9 +25,11 @@ The Yandex Cloud account must be set up to delegate some zone, like cloud.ructf.
 
 To communicate with Yandex Cloud API, you need create the service user (https://console.cloud.yandex.ru/folders/your_folder_id?section=service-accounts), give him the rights, and create a private key for authorization.
 
-After obtaining the token, copy file cloud\_master/files/api\_srv/ya\_token.py.example to cloud\_master/files/api\_srv/ya\_token.py and specify FOLDER\_ID, SERVICE\_ACCOUNT\_ID, KEY\_ID, ADMIN\_PUBLIC\_SSH\_KEY and PRIVATE\_KEY constants according to template. The identificators can be obtained using Yandex Cloud web-interface.
+After obtaining the token, copy file cloud\_master/files/api\_srv/ya\_token.py.example to cloud\_master/files/api\_srv/ya\_token.py and specify FOLDER\_ID, SERVICE\_ACCOUNT\_ID, KEY\_ID and PRIVATE\_KEY constants according to template. The identificators can be obtained using Yandex Cloud web-interface.
 
 To communicate with team routers, the SSH key pair is needed. it can be created with the following command: ```ssh-keygen -N "" -f cloud_master/files/api_srv/cloud_deploy_key```. The public key and the private key will be created.
+
+Also put in cloud_master/files/api_srv/admin_key.pub file your public key to have access to all nodes.
 
 To test the token execute ```python3 cloud_master/files/api_srv/list\_all\_snapshots.py```.
 
@@ -66,7 +68,7 @@ The last thing to do for the webserver is to set up the password for cloud conso
 
 #### Deploy Router Host ####
 
-Both team VMs: vulnerable VM and router VM are deployed from snapshots, so the snapshots have to be created first. The snapshot for router is made only once.
+Both team VMs: vulnerable VM and router VM are deployed from images, so the images have to be created first. The snapshot for router is made only once.
 
 The router host should be created as a s-1vcpu-1gb (1 CPU and 1 GB RAM) droplet. Enter these commands to configure it:
 
@@ -89,9 +91,9 @@ shutdown -P now
 
 To connect with SSH to this VM again in future, use port 2222 instead of 22.
 
-After poweroff, use the Digital Ocean console to make the snapshot of this VM.
+After poweroff, use the Digital Ocean console to make the image of this VM. Enable the option "optimize for faster deployment".
 
-The ID of snapshot can be obtained with ```python3 cloud_master/files/api_srv/list_all_snapshots.py```. This ID will be needed on next steps.
+The ID of snapshot can be obtained with web-interface or with ```python3 cloud_master/files/api_srv/list_all_images.py```. This ID will be needed on next steps.
 
 
 #### Deploy Vurnerable Host ####
@@ -100,23 +102,22 @@ The vurnerable host contains services for CTF. It is recommended to build it usi
 
 ```
 cd vuln_image
-packer init image.pkr.hcl
-packer build -var "api_token=dop_v1_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" image.pkr.hcl
+#packer init image.pkr.hcl
+packer build -var "api_token=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" image.pkr.hcl
 ```
 
 This command builds a typical image with docker-compose and single service. It usually takes about 15 minutes. Also the packer prepares the image for cloud: enables password authentication in SSH and sets apropriate network mask. The root password and the network address will be set automatically on the first run, if the distro is Ubuntu. For other distros some tweaks will be needed, see USERDATA\_TEMPLATE constant in cloud_master/files/api_srv/create_team_instance.py.
 
-The ID of snapshot can be obtained with ```python3 cloud_master/files/api_srv/list_all_snapshots.py```. This ID will be needed on next step.
+The ID of image can be obtained with web-interface or with ```python3 cloud_master/files/api_srv/list_all_images.py```. This ID will be needed on next step.
 
 
 #### Specifying Image IDS ####
 
-In order to create VMs, the cloud needs to know the ids of router and vm images and SSH key id. They can be specified in cloud_master/files/api_srv/create_team_instance.py file. Example:
+In order to create VMs, the cloud needs to know the ids of router and vm images and ADMIN\_PUBLIC\_SSH\_KEY. They can be specified in cloud_master/files/api_srv/create_team_instance.py file. Example:
 
 ```
-ROUTER_DO_IMAGE = 112309225
-VULNIMAGE_DO_IMAGE = 108811203
-DO_SSH_KEYS = [34519247]
+ROUTER_YA_IMAGE = "fd8XXXXXXXXXXXXXXXXX"
+VULNIMAGE_YA_IMAGE = "fd8XXXXXXXXXXXXXXXXX"
 ```
 
 Use the ids you've obtained on previous steps. Now the cloud is ready for deploy.

@@ -8,9 +8,9 @@ import time
 import os
 import traceback
 
-import do_api
+import ya_api
 from cloud_common import (log_progress, call_unitl_zero_exit,
-                          SSH_OPTS, SSH_DO_OPTS, # SSH_YA_OPTS, ROUTER_HOST
+                          SSH_OPTS, SSH_YA_OPTS,
                           )
 
 TEAM = int(sys.argv[1])
@@ -33,13 +33,13 @@ def main():
     ip = None
 
     if team_state == "CLOUD":
-        ip = do_api.get_ip_by_vmname(ROUTER_VM_NAME)
+        ip = ya_api.get_ip_by_vmname(ROUTER_VM_NAME)
         if ip is None:
             log_stderr("no ip, exiting")
             return 1
 
         cmd = ["systemctl stop openvpn@game_network_team%d" % TEAM]
-        ret = call_unitl_zero_exit(["ssh"] + SSH_DO_OPTS + [ip] + cmd)
+        ret = call_unitl_zero_exit(["ssh"] + SSH_YA_OPTS + [ip] + cmd)
         if not ret:
             log_stderr("stop main game net tun")
             return 1
@@ -49,7 +49,7 @@ def main():
 
     if team_state == "MIDDLE_STATE":
         # if ip is None:
-        #     ip = do_api.get_ip_by_vmname(VM_NAME)
+        #     ip = ya_api.get_ip_by_vmname(VM_NAME)
         #     if ip is None:
         #         log_stderr("no ip, exiting")
         #         return 1

@@ -11,9 +11,8 @@ import traceback
 import re
 import subprocess
 
-import do_api
+import ya_api
 from cloud_common import (log_progress, call_unitl_zero_exit, # get_cloud_ip,
-                          SSH_OPTS #, SSH_YA_OPTS
                           )
 
 TEAM = int(sys.argv[1])
@@ -32,7 +31,7 @@ def main():
         return 1
 
     if image_state == "RUNNING":
-        snapshots = do_api.list_snapshots()
+        snapshots = ya_api.list_snapshots()
 
         good_snapshots = []
 

@@ -11,7 +11,7 @@ import time
 import os
 import traceback
 
-import do_api
+import ya_api
 from cloud_common import (log_progress, call_unitl_zero_exit, # get_cloud_ip, untake_cloud_ip, 
                           SSH_OPTS #, SSH_YA_OPTS
                           )
@@ -43,7 +43,7 @@ def main():
         #if not ret:
             #log_stderr("failed to remove team vm")
             #return 1
-        do_ids = do_api.get_ids_by_vmname(IMAGE_VM_NAME)
+        do_ids = ya_api.get_ids_by_vmname(IMAGE_VM_NAME)
 
         if do_ids is None:
             log_stderr("failed to get vm ids, exiting")
@@ -53,7 +53,7 @@ def main():
             log_stderr("warinig: more than 1 droplet to be deleted")
 
         for do_id in do_ids:
-            if not do_api.delete_vm_by_id(do_id):
+            if not ya_api.delete_vm_by_id(do_id):
                 log_stderr("failed to delete droplet %d, exiting" % do_id)
                 return 1
 

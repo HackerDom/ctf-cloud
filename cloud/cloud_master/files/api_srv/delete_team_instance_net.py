@@ -11,11 +11,9 @@ import time
 import os
 import traceback
 
-import do_api
+import ya_api
 from cloud_common import (# get_cloud_ip,
-                          log_progress, call_unitl_zero_exit, # untake_cloud_ip,
-                          SSH_OPTS, SSH_DO_OPTS, # SSH_YA_OPTS,
-                          DOMAIN)
+                          log_progress, call_unitl_zero_exit, DOMAIN)
 
 
 TEAM = int(sys.argv[1])
@@ -56,14 +54,14 @@ def main():
         open("db/team%d/net_deploy_state" % TEAM, "w").write(net_state)
 
     if net_state == "DNS_REGISTERED":
-        domain_ids = do_api.get_domain_ids_by_hostname(
+        domain_ids = ya_api.get_domain_ids_by_hostname(
             DNS_NAME, DOMAIN, print_warning_on_fail=True)
         if domain_ids is None:
             log_stderr("failed to get domain ids, exiting")
             return 1
 
         for domain_id in domain_ids:
-            if not do_api.delete_domain_record(domain_id, DOMAIN):
+            if not ya_api.delete_domain_record(domain_id, DOMAIN):
                 log_stderr("failed to delete domain %d, exiting" % domain_id)
                 return 1
 
@@ -71,7 +69,7 @@ def main():
         open("db/team%d/net_deploy_state" % TEAM, "w").write(net_state)
 
     if net_state == "DO_LAUNCHED":
-        do_ids = do_api.get_ids_by_vmname(VM_NAME)
+        do_ids = ya_api.get_ids_by_vmname(VM_NAME)
 
         if do_ids is None:
             log_stderr("failed to get vm ids, exiting")
@@ -81,7 +79,7 @@ def main():
             log_stderr("warinig: more than 1 droplet to be deleted")
 
         for do_id in do_ids:
-            if not do_api.delete_vm_by_id(do_id):
+            if not ya_api.delete_vm_by_id(do_id):
                 log_stderr("failed to delete droplet %d, exiting" % do_id)
                 return 1
 

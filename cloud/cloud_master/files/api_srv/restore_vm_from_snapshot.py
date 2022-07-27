@@ -9,7 +9,7 @@ import os
 import traceback
 import re
 
-import do_api
+import ya_api
 from cloud_common import (log_progress, call_unitl_zero_exit, # get_cloud_ip,
                           SSH_OPTS, # SSH_YA_OPTS
                          )
@@ -35,7 +35,7 @@ def main():
         return 1
 
     if image_state == "RUNNING":
-        vm_ids = do_api.get_ids_by_vmname(IMAGE_VM_NAME)
+        vm_ids = ya_api.get_ids_by_vmname(IMAGE_VM_NAME)
         if not vm_ids:
             log_stderr("failed to find vm")
             return 1
@@ -49,7 +49,7 @@ def main():
 
         SNAPSHOT_NAME = IMAGE_VM_NAME + "-" + NAME
 
-        snapshots = do_api.list_snapshots()
+        snapshots = ya_api.list_snapshots()
 
         ids = []
 
@@ -57,7 +57,7 @@ def main():
             if snapshot.get("name", "") != SNAPSHOT_NAME:
                 continue
 
-            ids.append(int(snapshot["id"]))
+            ids.append(snapshot["id"])
 
         if not ids:
             print("msg:", "no such snapshot")
@@ -69,7 +69,7 @@ def main():
 
         snapshot_id = ids[0]
 
-        result = do_api.restore_vm_from_snapshot_by_id(vm_id, snapshot_id)
+        result = ya_api.restore_vm_from_snapshot_by_id(vm_id, snapshot_id)
 
         if not result:
             log_stderr("restore shapshot failed")

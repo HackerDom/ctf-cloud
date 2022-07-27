@@ -7,7 +7,7 @@ source "yandex" "vuln_image" {
   zone        = "ru-central1-a"
   token     = var.api_token
   image_family = "ctf-images"
-  image_name = "ctf-image-test"
+  image_name = "ctf-image-test-{{timestamp}}"
   source_image_family = "ubuntu-2004-lts"
   ssh_username  = "root"
   use_ipv4_nat = true

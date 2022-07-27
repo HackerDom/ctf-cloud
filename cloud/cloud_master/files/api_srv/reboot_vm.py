@@ -8,10 +8,8 @@ import time
 import os
 import traceback
 
-import do_api
-from cloud_common import (log_progress, call_unitl_zero_exit, # get_cloud_ip,
-                          SSH_OPTS, # SSH_YA_OPTS
-                         )
+import ya_api
+from cloud_common import (log_progress, call_unitl_zero_exit)
 
 TEAM = int(sys.argv[1])
 
@@ -29,7 +27,7 @@ def main():
         return 1
 
     if image_state == "RUNNING":
-        result = do_api.reboot_vm_by_vmname(IMAGE_VM_NAME)
+        result = ya_api.reboot_vm_by_vmname(IMAGE_VM_NAME)
 
         if not result:
             log_stderr("failed to reboot")

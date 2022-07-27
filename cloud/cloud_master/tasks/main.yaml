@@ -12,8 +12,8 @@
 - name: create users
   user: name=cloud shell=/bin/bash
 
-- name: add keys to cloud user
-  authorized_key: user=cloud key=https://github.com/alexbers.keys
+#- name: add keys to cloud user
+#  authorized_key: user=cloud key=https://github.com/alexbers.keys
 
 - name: copy nginx config
   copy: src=nginx/cloud dest=/etc/nginx/sites-available/cloud
@@ -78,9 +78,10 @@
       - "--chmod=D0755,F0644"
       - "--chown=root:root"
       - "--exclude=db/"
-      - "--exclude=do_deploy_key"
+      - "--exclude=cloud_deploy_key"
       - "--exclude=db_init_state_prod/"
       - "--exclude=*.py"
+      - "--exclude=ya_token.txt"
 
 - name: copy backend python files
   synchronize:
@@ -89,7 +90,8 @@
     rsync_opts:
       - "--chmod=D0755,F0755"
       - "--chown=root:root"
-      - "--exclude=do_token.py"
+      - "--exclude=ya_token.py"
+      - "--exclude=ya_token.txt"
       - "--include=*.py"
       - "--exclude=*"
 
@@ -104,5 +106,5 @@
 - name: copy keys
   copy: src=api_srv/{{item}} dest=/cloud/backend/ mode=0600 owner=cloud group=cloud
   with_items:
-    - do_deploy_key
-    - do_token.py
+    - cloud_deploy_key
+    - ya_token.py

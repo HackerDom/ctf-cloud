@@ -9,11 +9,10 @@ import time
 import os
 import traceback
 
-import do_api
+import ya_api
 from cloud_common import ( # get_cloud_ip, take_cloud_ip,
                           log_progress,
-                          call_unitl_zero_exit,SSH_OPTS, SSH_DO_OPTS,
-                          SSH_YA_OPTS, DOMAIN)
+                          call_unitl_zero_exit,SSH_OPTS, SSH_YA_OPTS, DOMAIN)
 
 TEAM = int(sys.argv[1])
 ROUTER_VM_NAME = "team%d-router" % TEAM
@@ -21,35 +20,47 @@ IMAGE_VM_NAME = "team%d" % TEAM
 DNS_NAME = IMAGE_VM_NAME
 
 
-ROUTER_DO_IMAGE = 112309225
-#VULNIMAGE_DO_IMAGE = 92534526
-#VULNIMAGE_DO_IMAGE = 92902014
-VULNIMAGE_DO_IMAGE = 112310683
-DO_SSH_KEYS = [435386, 35336800]
+ROUTER_YA_IMAGE = "fd8erh9mvch1cs3viqoi"
+VULNIMAGE_YA_IMAGE = "fd8og41f8ipfjls77btr"
+
+ADMIN_PUBLIC_SSH_KEY = open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "admin_key.pub")).read()
+DEPLOY_KEY = open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "cloud_deploy_key.pub")).read()
+
+ROUTER_MEM_GB = 2
+ROUTER_CORES = 2
+ROUTER_SSD_GB = 20
+
+IMAGE_MEM_GB = 4
+IMAGE_CORES = 2
+IMAGE_SSD_GB = 30
 
 
 def log_stderr(*params):
     print("Team %d:" % TEAM, *params, file=sys.stderr)
 
 
-USERDATA_TEMPLATE = """#!/bin/bash
+EVERYBOOT_CMD = """#!/bin/bash
 
 usermod -p '{0}' root
 
-echo 'network:
-    version: 2
-    ethernets:
-        eth1:
-            routes:
-                - to: 10.60.0.0/14
-                  via: {1}
-                - to: 10.80.0.0/14
-                  via: {1}
-                - to: 10.10.10.0/24
-                  via: {1}
-' > /etc/netplan/60-ctf.yaml
+# echo 'network:
+#     version: 2
+#     ethernets:
+#         eth0:
+#             routes:
+#                 - to: 10.60.0.0/14
+#                   via: {1}
+#                 - to: 10.80.0.0/14
+#                   via: {1}
+#                 - to: 10.10.10.0/24
+#                   via: {1}
+# ' > /etc/netplan/60-ctf.yaml
 
-netplan apply
+# netplan apply
+
+sed -i 's/#PermitRootLogin No/PermitRootLogin yes/' /etc/ssh/sshd_config
+systemctl restart sshd
+
 """
 
 
@@ -67,18 +78,35 @@ def main():
     droplet_id = None
 
     if net_state == "NOT_STARTED":
-        vpc_id = do_api.get_vpc_by_name("team%d" % TEAM)
+        vpc_id = ya_api.get_vpc_by_name("team%d" % TEAM)
         print("vpc_id", vpc_id)
 
+        team_network = "%d.%d.%d.%d/25" % (10, 60 + TEAM//256, TEAM%256, 0)
+
+        router_ip = "%d.%d.%d.%d" % (10, 60 + TEAM//256, TEAM%256, 3)
+        vulnimage_ip = "%d.%d.%d.%d" % (10, 60 + TEAM//256, TEAM%256, 4)
+
         if vpc_id is None:
-            team_network = "%d.%d.%d.%d/24" % (10, 60 + TEAM//256, TEAM%256, 0)
-            vpc_id = do_api.create_vpc("team%d" % TEAM, team_network)
+            routes = [
+                ["10.60.0.0/14", router_ip],
+                ["10.80.0.0/14", router_ip],
+                ["10.10.10.0/24", router_ip],
+            ]
+            vpc_id = ya_api.create_vpc("team%d" % TEAM, team_network, routes)
 
         if vpc_id is None:
             log_stderr("no vpc id, exiting")
             exit(1)
 
-        exists = do_api.check_vm_exists(ROUTER_VM_NAME)
+        print("vpc_id2", vpc_id)
+
+        subnet_id = ya_api.get_subnet_id(vpc_id, team_network)
+
+        if subnet_id is None:
+            log_stderr("no subnet_id, exiting")
+            exit(1)
+
+        exists = ya_api.check_vm_exists(ROUTER_VM_NAME)
         if exists is None:
             log_stderr("failed to determine if vm exists, exiting")
             return 1
@@ -86,24 +114,32 @@ def main():
         log_progress("5%")
 
         if not exists:
-            droplet_id = do_api.create_vm(
-                ROUTER_VM_NAME, image=ROUTER_DO_IMAGE, ssh_keys=DO_SSH_KEYS,
-                vpc_uuid=vpc_id, tag="team-router")
+            droplet_id = ya_api.create_vm(
+                ROUTER_VM_NAME, ssh_keys=[ADMIN_PUBLIC_SSH_KEY, DEPLOY_KEY], image_id=ROUTER_YA_IMAGE,
+                subnet_id=subnet_id, ip=router_ip, mem_gb=ROUTER_MEM_GB, cores=ROUTER_CORES,
+                ssd_gb=ROUTER_SSD_GB, tag="team-router")
             if droplet_id is None:
                 log_stderr("failed to create vm, exiting")
                 return 1
 
         net_state = "DO_LAUNCHED"
         open("db/team%d/net_deploy_state" % TEAM, "w").write(net_state)
-        time.sleep(1)  # this allows to make less requests (there is a limit)
+        time.sleep(10)  # this allows to make less requests (there is a limit)
+
 
     log_progress("10%")
     ip = None
     if net_state == "DO_LAUNCHED":
-        if not droplet_id:
-            ip = do_api.get_ip_by_vmname(ROUTER_VM_NAME)
-        else:
-            ip = do_api.get_ip_by_id(droplet_id)
+
+        for attempt in range(5):
+            if not droplet_id:
+                ip = ya_api.get_ip_by_vmname(ROUTER_VM_NAME)
+            else:
+                ip = ya_api.get_ip_by_id(droplet_id)
+
+            if ip:
+                break
+            time.sleep(10)
 
         if ip is None:
             log_stderr("no ip, exiting")
@@ -111,18 +147,18 @@ def main():
 
         log_progress("15%")
 
-        domain_ids = do_api.get_domain_ids_by_hostname(DNS_NAME, DOMAIN)
+        domain_ids = ya_api.get_domain_ids_by_hostname(DNS_NAME, DOMAIN)
         if domain_ids is None:
             log_stderr("failed to check if dns exists, exiting")
             return 1
 
         if domain_ids:
             for domain_id in domain_ids:
-                do_api.delete_domain_record(domain_id, DOMAIN)
+                ya_api.delete_domain_record(domain_id, DOMAIN)
 
         log_progress("17%")
 
-        if do_api.create_domain_record(DNS_NAME, ip, DOMAIN):
+        if ya_api.create_domain_record(DNS_NAME, ip, DOMAIN):
             net_state = "DNS_REGISTERED"
             open("db/team%d/net_deploy_state" % TEAM, "w").write(net_state)
         else:
@@ -132,13 +168,14 @@ def main():
         for i in range(20, 50):
             # just spinning for the sake of smooth progress
             log_progress("%d%%" % i)
-            time.sleep(1)
+            time.sleep(0.5)
+
 
     log_progress("50%")
 
     if net_state == "DNS_REGISTERED":
         if ip is None:
-            ip = do_api.get_ip_by_vmname(ROUTER_VM_NAME)
+            ip = ya_api.get_ip_by_vmname(ROUTER_VM_NAME)
 
             if ip is None:
                 log_stderr("no ip, exiting")
@@ -148,7 +185,7 @@ def main():
 
         file_from = "db/team%d/server_outside.conf" % TEAM
         file_to = "%s:/etc/openvpn/server_outside_team%d.conf" % (ip, TEAM)
-        ret = call_unitl_zero_exit(["scp"] + SSH_DO_OPTS +
+        ret = call_unitl_zero_exit(["scp"] + SSH_YA_OPTS +
                                    [file_from, file_to])
         if not ret:
             log_stderr("scp to DO failed")
@@ -158,16 +195,16 @@ def main():
 
         file_from = "db/team%d/game_network.conf" % TEAM
         file_to = "%s:/etc/openvpn/game_network_team%d.conf" % (ip, TEAM)
-        ret = call_unitl_zero_exit(["scp"] + SSH_DO_OPTS +
+        ret = call_unitl_zero_exit(["scp"] + SSH_YA_OPTS +
                                    [file_from, file_to])
         if not ret:
-            log_stderr("scp to DO failed")
+            log_stderr("scp to YA failed")
             return 1
 
         log_progress("60%")
 
         cmd = ["systemctl start openvpn@server_outside_team%d" % TEAM]
-        ret = call_unitl_zero_exit(["ssh"] + SSH_DO_OPTS + [ip] + cmd)
+        ret = call_unitl_zero_exit(["ssh"] + SSH_YA_OPTS + [ip] + cmd)
         if not ret:
             log_stderr("start internal tun")
             return 1
@@ -176,7 +213,7 @@ def main():
         dest = "10.%d.%d.3" % (60 + TEAM//256, TEAM%256)
         cmd = ["iptables -t nat -A PREROUTING -d %s -p tcp " % ip +
                "--dport 22 -j DNAT --to-destination %s:22" % dest]
-        ret = call_unitl_zero_exit(["ssh"] + SSH_DO_OPTS + [ip] + cmd)
+        ret = call_unitl_zero_exit(["ssh"] + SSH_YA_OPTS + [ip] + cmd)
         if not ret:
            log_stderr("unable to nat port 22")
            return 1
@@ -185,7 +222,7 @@ def main():
 
         cmd = ["iptables -t nat -A POSTROUTING -o eth1 -p tcp " +
                "-m tcp --dport 22 -j MASQUERADE"]
-        ret = call_unitl_zero_exit(["ssh"] + SSH_DO_OPTS + [ip] + cmd)
+        ret = call_unitl_zero_exit(["ssh"] + SSH_YA_OPTS + [ip] + cmd)
         if not ret:
            log_stderr("unable to masquerade port 22")
            return 1
@@ -197,7 +234,7 @@ def main():
 
 
         cmd = ["systemctl start openvpn@game_network_team%d" % TEAM]
-        ret = call_unitl_zero_exit(["ssh"] + SSH_DO_OPTS + [ip] + cmd)
+        ret = call_unitl_zero_exit(["ssh"] + SSH_YA_OPTS + [ip] + cmd)
         if not ret:
             log_stderr("start main game net tun")
             return 1
@@ -216,19 +253,33 @@ def main():
     if net_state == "READY":
         if image_state == "NOT_STARTED":
             pass_hash = open("db/team%d/root_passwd_hash.txt" % TEAM).read().strip()
-            team_network = "%d.%d.%d.%d/24" % (10, 60 + TEAM//256, TEAM%256, 0)
-            team_router = "%d.%d.%d.%d" % (10, 60 + TEAM//256, TEAM%256, 2)
+            team_network = "%d.%d.%d.%d/25" % (10, 60 + TEAM//256, TEAM%256, 0)
 
-            vpc_id = do_api.get_vpc_by_name("team%d" % TEAM)
+            router_ip = "%d.%d.%d.%d" % (10, 60 + TEAM//256, TEAM%256, 3)
+            vulnimage_ip = "%d.%d.%d.%d" % (10, 60 + TEAM//256, TEAM%256, 4)
+
+
+            vpc_id = ya_api.get_vpc_by_name("team%d" % TEAM)
 
             if vpc_id is None:
-                vpc_id = do_api.create_vpc("team%d" % TEAM, team_network)
+                routes = [
+                    ["10.60.0.0/14", router_ip],
+                    ["10.80.0.0/14", router_ip],
+                    ["10.10.10.0/24", router_ip],
+                ]
+                vpc_id = ya_api.create_vpc("team%d" % TEAM, team_network, routes)
 
             if vpc_id is None:
                 log_stderr("no vpc id, exiting")
                 exit(1)
 
-            exists = do_api.check_vm_exists(IMAGE_VM_NAME)
+            subnet_id = ya_api.get_subnet_id(vpc_id, team_network)
+
+            if subnet_id is None:
+                log_stderr("no subnet_id, exiting")
+                exit(1)
+
+            exists = ya_api.check_vm_exists(IMAGE_VM_NAME)
             if exists is None:
                 log_stderr("failed to determine if vm exists, exiting")
                 return 1
@@ -236,11 +287,17 @@ def main():
             log_progress("69%")
 
             if not exists:
-                userdata = USERDATA_TEMPLATE.format(pass_hash, team_router)
+                everyboot_cmd = EVERYBOOT_CMD.format(pass_hash, router_ip)
 
-                vulnimage_droplet_id = do_api.create_vm(
-                    IMAGE_VM_NAME, image=VULNIMAGE_DO_IMAGE, ssh_keys=DO_SSH_KEYS,
-                    user_data=userdata, vpc_uuid=vpc_id, tag="team-image", size="s-8vcpu-16gb")
+                user_cloud_config = {
+                    "runcmd": ["/bin/bash", "-c", everyboot_cmd]
+                }
+
+                vulnimage_droplet_id = ya_api.create_vm(
+                    IMAGE_VM_NAME, ssh_keys=[ADMIN_PUBLIC_SSH_KEY, DEPLOY_KEY], image_id=VULNIMAGE_YA_IMAGE,
+                    user_cloud_config=user_cloud_config, subnet_id=subnet_id, ip=vulnimage_ip,
+                    mem_gb=IMAGE_MEM_GB, cores=IMAGE_CORES, ssd_gb=IMAGE_SSD_GB,
+                    tag="team-image")
                 if vulnimage_droplet_id is None:
                     log_stderr("failed to create vm, exiting")
                     return 1

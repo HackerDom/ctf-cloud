@@ -12,7 +12,7 @@ SCRIPTS_PATH="/cloud/backend"
 
 DEV_MODE = False
 
-DOMAIN = "cloud.ructf.org"
+DOMAIN = "yacloud.alexbers.com"
 
 RESP_HEADERS = [
     ("Content-Type", "application/json"), 

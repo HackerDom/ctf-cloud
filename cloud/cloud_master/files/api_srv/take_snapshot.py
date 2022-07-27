@@ -9,10 +9,8 @@ import os
 import traceback
 import re
 
-import do_api
-from cloud_common import (log_progress, call_unitl_zero_exit, #get_cloud_ip,
-                          SSH_OPTS #SSH_YA_OPTS
-                          )
+import ya_api
+from cloud_common import (log_progress, call_unitl_zero_exit)
 
 TEAM = int(sys.argv[1])
 NAME = sys.argv[2]
@@ -35,7 +33,7 @@ def main():
         return 1
 
     if image_state == "RUNNING":
-        ids = do_api.get_ids_by_vmname(IMAGE_VM_NAME)
+        ids = ya_api.get_ids_by_vmname(IMAGE_VM_NAME)
         if not ids:
             log_stderr("failed to find vm")
             return 1
@@ -44,7 +42,7 @@ def main():
             log_stderr("more than one vm with this name exists")
             return 1
 
-        result = do_api.take_vm_snapshot(list(ids)[0], IMAGE_VM_NAME + "-" + NAME)
+        result = ya_api.take_vm_snapshot(list(ids)[0], IMAGE_VM_NAME + "-" + NAME)
         if not result:
             log_stderr("take shapshot failed")
             return 1

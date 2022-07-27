@@ -67,9 +67,11 @@ def call_api(method, url, json={}, ret_field=None, folder_id=FOLDER_ID, page_siz
             }
 
             resp = requests.request(method, url, headers=headers, json=json,
-                params={"folder_id": folder_id, "page_size": page_size})
+                params={"folder_id": folder_id, "page_size": page_size},
+                #proxies={"https": "http://127.0.0.1:8888"}, verify=False
+                )
 
-            print(resp.status_code, resp.text)
+            #print(resp.status_code, resp.text)
 
             if resp.status_code == 404:
                 log("call api %s %s returned 404: %s %s" % (method, url, resp.reason, repr(resp.text)))
@@ -135,10 +137,10 @@ def check_vm_exists(vm_name):
     return False
 
 
-def create_vm(vm_name, ssh_keys, vpc_uuid=None,
-              mem_gb=2, cores=2, image_id=None,
+def create_vm(vm_name, ssh_keys, subnet_id=None, ip=None,
+              mem_gb=2, cores=2, ssd_gb=15, image_id=None,
               snapshot_id=None, tag="vm",
-              user_data="#!/bin/bash\n\n", attempts=10, timeout=20):
+              user_cloud_config={}, userdata_override=None, attempts=10, timeout=20):
 
     if not image_id and not snapshot_id:
         log("create_vm, image_id or snapshot_id is needed")
@@ -155,6 +157,7 @@ def create_vm(vm_name, ssh_keys, vpc_uuid=None,
 
         "disable_root": False,
     }
+    cloud_config.update(user_cloud_config)
 
     config = "#cloud-config\n" + yaml.dump(cloud_config)
 
@@ -176,26 +179,31 @@ def create_vm(vm_name, ssh_keys, vpc_uuid=None,
             "mode": "READ_WRITE",
             "autoDelete": True,
             "diskSpec": {
-                "name": "delmedisk",
-                "description": "desc",
+                "name": vm_name + "-disk",
                 "typeId": "network-ssd",
-                "size": 15*1024*1024*1024,
+                "size": ssd_gb*1024*1024*1024,
                 "imageId": image_id,
                 "snapshot_id": snapshot_id
             },
         },
         "networkInterfaceSpecs": {
-            "subnetId": "e9btb1ae8ap9mgosijis",
+            "subnetId": subnet_id,
+
             "primaryV4AddressSpec": {
+                "address": ip,
                 "oneToOneNatSpec": {
                     "ipVersion": "IPV4"
-                }
+                },
             }
         },
         "metadata": {
             "user-data": config
         },
     }
+
+    if userdata_override:
+        data["metadata"] = {"user-data": userdata_override}
+
     vm = call_api("POST", "https://compute.api.cloud.yandex.net/compute/v1/instances", data, ret_field="metadata", attempts=attempts, timeout=timeout)
 
     return vm["instanceId"]
@@ -307,6 +315,12 @@ def restore_vm_from_snapshot_by_id(droplet_id, snapshot_id, attempts=5, timeout=
     cores = vm["resources"]["cores"]
     disk_id = vm["bootDisk"]["diskId"]
 
+    user_data = vm.get("metadata", {}).get("user-data")
+
+    subnet_id = vm["networkInterfaces"][0]["subnetId"]
+    ip = vm["networkInterfaces"][0]["primaryV4Address"]["address"]
+
+
     if not disk_id:
         log("restore_vm_from_snapshot_by_id failed, no disk_id")
         return False
@@ -315,7 +329,7 @@ def restore_vm_from_snapshot_by_id(droplet_id, snapshot_id, attempts=5, timeout=
         {"view": "FULL"}, ret_field=None, folder_id=None, attempts=attempts, timeout=timeout)
 
     disk_type = disk["typeId"]
-    disk_size = int(disk["size"])
+    disk_size_gb = (int(disk["size"]) + (1024*1024*1024-1)) // (1024 * 1024 * 1024)
 
     ok = delete_vm_by_id(droplet_id)
     if not ok:
@@ -325,9 +339,16 @@ def restore_vm_from_snapshot_by_id(droplet_id, snapshot_id, attempts=5, timeout=
     # save one api call by sleeping 15 seconds
     time.sleep(15)
 
-    new_vm = create_vm(vm_name, ssh_keys=None, mem_gb=mem_gb, cores=cores, image_id=None, snapshot_id=snapshot_id)
+    new_vm = create_vm(vm_name, ssh_keys=None, mem_gb=mem_gb, cores=cores, ssd_gb = disk_size_gb,
+                       subnet_id=subnet_id, ip=ip, userdata_override=user_data, snapshot_id=snapshot_id)
 
     return True
+
+
+def list_images(attempts=4, timeout=5):
+    vms = call_api("GET", "https://compute.api.cloud.yandex.net/compute/v1/images", folder_id="standard-images", ret_field="images",
+                   page_size=1000, attempts=attempts, timeout=timeout)
+    return vms
 
 
 def list_snapshots(attempts=4, timeout=5):
@@ -364,7 +385,7 @@ def get_vpc_by_name(name, print_warning_on_fail=False):
     return None
 
 
-def create_vpc(name, ip_range, attempts=5, timeout=20):
+def create_vpc(name, ip_range, routes=[], attempts=5, timeout=20):
     vpc_id = get_vpc_by_name(name)
 
     if not vpc_id:
@@ -388,10 +409,28 @@ def create_vpc(name, ip_range, attempts=5, timeout=20):
         if ip_range in subnet.get("v4CidrBlocks", []):
             # already created
             if subnet.get("networkId") == vpc_id:
-                return True
+                return vpc_id
             log("create_vpc: the network addr is already attached to network", subnet.get("networkId"))
-            return False
+            return None
 
+
+
+    route_table_id = None
+    if routes:
+        routes_data = {
+            "folderId": FOLDER_ID,
+            "name": name + "-routes",
+            "networkId": vpc_id,
+            "staticRoutes": [{"destinationPrefix": r[0], "nextHopAddress": r[1]} for r in routes]
+        }
+        routes_op = call_api("POST", "https://vpc.api.cloud.yandex.net/vpc/v1/routeTables", routes_data, ret_field=None, attempts=attempts, timeout=timeout)
+
+
+        if not routes_op:
+            log("create_vpc: failed to create routes for net", subnet.get("networkId"), routes_op)
+            return None
+
+        route_table_id = routes_op["metadata"]["routeTableId"]
 
     subnet_data = {
         "folderId": FOLDER_ID,
@@ -400,12 +439,29 @@ def create_vpc(name, ip_range, attempts=5, timeout=20):
         "zoneId": ZONE_ID,
         "v4CidrBlocks": [
             ip_range
-        ]
+        ],
+        "routeTableId": route_table_id
     }
 
     subnet = call_api("POST", "https://vpc.api.cloud.yandex.net/vpc/v1/subnets", subnet_data, ret_field=None, attempts=attempts, timeout=timeout)
 
-    return bool(subnet)
+
+
+    return vpc_id
+
+def get_subnet_id(vpc_id, ip_range, attempts=5, timeout=20):
+    subnets = call_api("GET", "https://vpc.api.cloud.yandex.net/vpc/v1/subnets", ret_field="subnets", attempts=attempts, timeout=timeout)
+
+    for subnet in subnets:
+        if ip_range in subnet.get("v4CidrBlocks", []):
+            # already created
+            if subnet.get("networkId") == vpc_id:
+                return subnet.get("id")
+            log("get_subnet_id: the network addr is already attached to network", subnet.get("networkId"))
+            return None
+    return None
+
+
 
 
 def get_domain_zone_id(domain, attempts=5, timeout=10):
@@ -446,6 +502,9 @@ def get_all_domain_records(domain, zone_id=None, attempts=5, timeout=20):
 
 
 def get_domain_ids_by_hostname(host_name, domain, print_warning_on_fail=False):
+    if not domain.endswith("."):
+        domain += "."
+
     ids = set()
 
     records = get_all_domain_records(domain)

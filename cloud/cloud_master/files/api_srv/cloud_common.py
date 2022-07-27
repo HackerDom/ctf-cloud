@@ -9,7 +9,7 @@ import time
 import os
 import shutil
 
-DOMAIN = "cloud.ructf.org"
+DOMAIN = "yacloud.alexbers.com"
 
 # change me before the game
 ROUTER_HOST = "vpn.ructfe.org"
@@ -24,15 +24,10 @@ SSH_OPTS = [
     "-o", "ConnectTimeout=10"
 ]
 
-SSH_DO_OPTS = SSH_OPTS + [
+SSH_YA_OPTS = SSH_OPTS + [
     "-o", "Port=2222",
     "-o", "User=root",
-    "-o", "IdentityFile=do_deploy_key"
-]
-
-SSH_YA_OPTS = SSH_OPTS + [
-    "-o", "User=cloud",
-    #"-o", "IdentityFile=ructfe2020_ya_deploy"
+    "-o", "IdentityFile=cloud_deploy_key"
 ]
 
 # def untake_cloud_ip(team):

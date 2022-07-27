@@ -3,7 +3,7 @@ The VPN server is a core of CTF network. It routes trafic between team routers o
 ### Pre-requirements ###
 
 To deploy VPN you should have some Ubuntu 20.04 box with fast network (1Gbit/second is recommended).
-The server can be a dedicated server (better) or virtual private server on some hosting like Digital Ocean.
+The server can be a dedicated server (better) or virtual private server on some hosting like Yandex Cloud.
 
 The server should have at least 8GB RAM and 4 CPU cores. For big competitions server with 64GB RAM and 16 CPU cores
 is recommended. If you want to record the traffic, the server should have enough free space to store it in compressed form.
