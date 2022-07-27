@@ -12,9 +12,7 @@ import os
 import traceback
 
 import ya_api
-from cloud_common import (log_progress, call_unitl_zero_exit, # get_cloud_ip, untake_cloud_ip, 
-                          SSH_OPTS #, SSH_YA_OPTS
-                          )
+from cloud_common import (log_progress, call_unitl_zero_exit)
 
 TEAM = int(sys.argv[1])
 IMAGE_VM_NAME = "team%d" % TEAM

@@ -143,7 +143,7 @@ def check_vm_exists(vm_name):
 def create_vm(vm_name, ssh_keys, subnet_id=None, ip=None,
               mem_gb=2, cores=2, ssd_gb=15, image_id=None,
               snapshot_id=None, tag="vm",
-              user_cloud_config={}, userdata_override=None, attempts=10, timeout=20):
+              root_password_hash=None, userdata_override=None, attempts=10, timeout=20):
 
     if not image_id and not snapshot_id:
         log("create_vm, image_id or snapshot_id is needed")
@@ -151,16 +151,20 @@ def create_vm(vm_name, ssh_keys, subnet_id=None, ip=None,
 
 
     cloud_config = {
+        "ssh_pwauth": True if root_password_hash else None,
         "users": [
             {
                 "name": "root",
-                "ssh_authorized_keys": ssh_keys
-            }
+                "ssh_authorized_keys": ssh_keys,
+                "shell": "/bin/bash",
+            },
         ],
-
+        "chpasswd": {
+            "expire": False,
+            "list": ["root:" + root_password_hash],
+        } if root_password_hash else None,
         "disable_root": False,
     }
-    cloud_config.update(user_cloud_config)
 
     config = "#cloud-config\n" + yaml.dump(cloud_config)
 

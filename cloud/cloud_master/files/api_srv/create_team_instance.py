@@ -21,7 +21,7 @@ DNS_NAME = IMAGE_VM_NAME
 
 
 ROUTER_YA_IMAGE = "fd8erh9mvch1cs3viqoi"
-VULNIMAGE_YA_IMAGE = "fd8og41f8ipfjls77btr"
+VULNIMAGE_YA_IMAGE = "fd8io4od9lo2h7a32dk9"
 
 ADMIN_PUBLIC_SSH_KEY = open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "admin_key.pub")).read()
 DEPLOY_KEY = open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "cloud_deploy_key.pub")).read()
@@ -37,31 +37,6 @@ IMAGE_SSD_GB = 30
 
 def log_stderr(*params):
     print("Team %d:" % TEAM, *params, file=sys.stderr)
-
-
-EVERYBOOT_CMD = """#!/bin/bash
-
-usermod -p '{0}' root
-
-# echo 'network:
-#     version: 2
-#     ethernets:
-#         eth0:
-#             routes:
-#                 - to: 10.60.0.0/14
-#                   via: {1}
-#                 - to: 10.80.0.0/14
-#                   via: {1}
-#                 - to: 10.10.10.0/24
-#                   via: {1}
-# ' > /etc/netplan/60-ctf.yaml
-
-# netplan apply
-
-sed -i 's/#PermitRootLogin No/PermitRootLogin yes/' /etc/ssh/sshd_config
-systemctl restart sshd
-
-"""
 
 
 def main():
@@ -287,15 +262,9 @@ def main():
             log_progress("69%")
 
             if not exists:
-                everyboot_cmd = EVERYBOOT_CMD.format(pass_hash, router_ip)
-
-                user_cloud_config = {
-                    "runcmd": ["/bin/bash", "-c", everyboot_cmd]
-                }
-
                 vulnimage_droplet_id = ya_api.create_vm(
                     IMAGE_VM_NAME, ssh_keys=[ADMIN_PUBLIC_SSH_KEY, DEPLOY_KEY], image_id=VULNIMAGE_YA_IMAGE,
-                    user_cloud_config=user_cloud_config, subnet_id=subnet_id, ip=vulnimage_ip,
+                    root_password_hash=pass_hash, subnet_id=subnet_id, ip=vulnimage_ip,
                     mem_gb=IMAGE_MEM_GB, cores=IMAGE_CORES, ssd_gb=IMAGE_SSD_GB,
                     tag="team-image")
                 if vulnimage_droplet_id is None:

@@ -6,3 +6,4 @@
 # Prohibit to set PasswordAuthentication no
 #sed -i 's/updated = update_ssh_config/\    updated = False/' /usr/lib/python3/dist-packages/cloudinit/config/cc_set_passwords.py
  
+sed -i 's/#PermitRootLogin No/PermitRootLogin yes/' /etc/ssh/sshd_config
