@@ -1,6 +1,6 @@
 # Developed by Alexander Bersenev from Hackerdom team, bay@hackerdom.ru
 
-"""Common functions that make requests to digital ocean api"""
+"""Common functions that make requests to yandex cloud api"""
 
 import requests
 import time
