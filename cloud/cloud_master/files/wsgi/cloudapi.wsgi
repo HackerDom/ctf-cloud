@@ -29,8 +29,8 @@ RESP_HEADERS = [
 RATE_LIMITS = {
     "create_vm": 20,
     "take_snapshot": 300,
-    "connect_vm_to_game_network": 30,
-    "disconnect_vm_from_game_network": 30,
+    "open_vm": 30,
+    "isolate_vm": 30,
     "list_snapshots": 10,
     "restore_vm_from_snapshot": 300,
     "remove_snapshot": 30,
@@ -207,8 +207,31 @@ def create_task(team, task_name, script_name, args, timeout=600):
     return "202 Accepted", {"result": "ok", "task": task_name}
 
 
+def get_available_and_visible_vms():
+    try:
+        ret = {}
+        for line in open("%s/services.txt" % DB_PATH):
+            line = line.strip()
+            m = re.fullmatch(r"([0-9a-zA-Z_]+)\s+(\d+)\s*\+", line)
+            if not m:
+                continue
+            vm, vm_number = m.groups()
+            ret[vm] = int(vm_number)
+        return ret
+    except (OSError, ValueError):
+        return {}
+
+
+def cmd_list_vms(team, args):
+    vms = ["%-16s 10.%d.%d.%d" % (vm, 60+team//256, team%256, vm_number)
+                                 for vm, vm_number in get_available_and_visible_vms().items()]
+    return "200 Ok", {"result": "ok", "msg": "\n".join(vms)}
+
+
 def cmd_create_vm(team, args):
-    return create_task(team, "create_vm", "create_team_instance.py", [str(team)], timeout=1200)
+    vm = int(args[0])
+    return "200 Ok", {"result": "ok", "msg": "VMs are created by orgs"}
+    # return create_task(team, "create_vm", "create_team_instance.py", [str(team), str(vm)], timeout=1200)
 
 def cmd_get_team_openvpn_config(team, args):
     if not DEV_MODE:
@@ -220,84 +243,114 @@ def cmd_get_team_openvpn_config(team, args):
     return "200 Ok", {"result": "ok", "msg": config}
 
 def cmd_get_vm_info(team, args):
+    vm = int(args[0])
+
     net_state = open("%s/team%d/net_deploy_state" % (DB_PATH, team)).read().strip()
-    image_state = open("%s/team%d/image_deploy_state" % (DB_PATH, team)).read().strip()
+    image_state = open("%s/team%d/serv%d_image_deploy_state" % (DB_PATH, team, vm)).read().strip()
+    open_state = open("%s/team%d/serv%d_open_state" % (DB_PATH, team, vm)).read().strip()
     team_state = open("%s/team%d/team_state" % (DB_PATH, team)).read().strip()
 
-    info = {"state": "not started", "external addr": "none", "internal addr": "none", 
-            "root passwd": "none", "net": "disconnected from game"}
+    info = {"state": "not started", "ip": "none",
+            "root passwd": "none", "net": "disconnected from the game"}
 
     img_ready = (net_state == "READY" and image_state == "RUNNING")
     if img_ready:
-        root_passwd = open("%s/team%d/root_passwd.txt" % (DB_PATH, team)).read().strip()
+        root_passwd = open("%s/team%d/serv%d_root_passwd.txt" % (DB_PATH, team, vm)).read().strip()
 
         info["state"] = "running"
-        info["external addr"] = "team%d.%s" % (team, DOMAIN)
-        info["internal addr"] = "10.%d.%d.3" % (60 + team//256, team%256)
+        info["ip"] = "10.%d.%d.%d" % (60 + team//256, team%256, vm)
         info["root passwd"] = root_passwd
         
     if team_state == "CLOUD":
-        info["net"] = "connected to game"
+        info["net"] = "connected to the game"
+
+    if open_state == "CLOSED":
+        info["net"] = "isolated"
         
     msglines = []
-    for field in ["state", "external addr", "internal addr", "root passwd", "net"]:
+    for field in ["state", "ip", "root passwd", "net"]:
         msglines.append("  %-13s : %s" % (field, info[field]))
     
-    config = open("%s/team%d/root_passwd.txt" % (DB_PATH, team)).read().strip()
     return "200 Ok", {"result": "ok", "msg": "\n".join(msglines)}
 
 def cmd_login(team, args):
-    AUTOCOMPLETE = ["create_vm", "get_team_openvpn_config", "get_vm_info",
-                    "connect_vm_to_game_network", "disconnect_vm_from_game_network",
-                    "take_snapshot", "list_snapshots", "restore_vm_from_snapshot", "remove_snapshot",
-                    "reboot_vm", "help", "man", "oblaka"]
-    return "200 Ok", {"result": "ok", "msg": "access granted\n", "team": team, 
-                      "autocomplete": AUTOCOMPLETE}
+    COMMANDS_WITHOUT_VM = ["list_vms", "help", "man",
+                           "get_team_openvpn_config", "oblaka"]
+    COMMANDS_WITH_VM = ["create_vm", "get_vm_info", "open_vm", "isolate_vm",
+                        "take_snapshot", "list_snapshots",
+                        "restore_vm_from_snapshot", "remove_snapshot", "reboot_vm"]
+    vms = get_available_and_visible_vms()
+    if not vms:
+        return "200 Ok", {"result": "ok", "msg": "access granted\n", "team": team,
+                          "autocomplete": COMMANDS_WITHOUT_VM + COMMANDS_WITH_VM}
+    autocomplete = COMMANDS_WITHOUT_VM.copy()
+    for command in COMMANDS_WITH_VM:
+        for vm in vms:
+            autocomplete.append(command + " " + vm)
+    return "200 Ok", {"result": "ok", "msg": "access granted\n", "team": team,
+                      "autocomplete": autocomplete}
 
-def cmd_connect_vm_to_game_network(team, args):
-    return create_task(team, "connect_vm_to_game_network", "switch_team_net_to_cloud.py", [str(team)])
 
-def cmd_disconnect_vm_from_game_network(team, args):
-    return create_task(team, "disconnect_vm_from_game_network", "switch_team_net_to_not_cloud.py", [str(team)])
+def cmd_open_vm(team, args):
+    vm = int(args[0])
+    return create_task(team, "open_vm", "open_vm.py", [str(team), str(vm)])
+
+
+def cmd_isolate_vm(team, args):
+    vm = int(args[0])
+    return create_task(team, "isolate_vm", "isolate_vm.py", [str(team), str(vm)])
+
 
 def cmd_take_snapshot(team, args):
-    name = str(args[0])
+    vm = int(args[0])
+    name = str(args[1])
     if not re.fullmatch(r"[0-9a-zA-Z_]+", name):
         return "422 Failed to take snapshot", {"result": "bad snapshot name"}
-    return create_task(team, "take_snapshot", "take_snapshot.py", [str(team), name])
+    return create_task(team, "take_snapshot", "take_snapshot.py", [str(team), str(vm), name])
+
 
 def cmd_list_snapshots(team, args):
-    return create_task(team, "list_snapshots", "list_snapshots.py", [str(team)])    
+    vm = int(args[0])
+    return create_task(team, "list_snapshots", "list_snapshots.py", [str(team), str(vm)])
+
 
 def cmd_restore_vm_from_snapshot(team, args):
-    name = str(args[0])
+    vm = int(args[0])
+    name = str(args[1])
     if not re.fullmatch(r"[0-9a-zA-Z_]+", name):
         return "422 Failed to take snapshot", {"result": "bad snapshot name"}    
-    return create_task(team, "restore_vm_from_snapshot", "restore_vm_from_snapshot.py", [str(team), name])
+    return create_task(team, "restore_vm_from_snapshot", "restore_vm_from_snapshot.py", [str(team), str(vm), name])
+
 
 def cmd_remove_snapshot(team, args):
-    name = str(args[0])
+    vm = int(args[0])
+    name = str(args[1])
     if not re.fullmatch(r"[0-9a-zA-Z_]+", name):
         return "422 Failed to remove snapshot", {"result": "bad snapshot name"}    
-    return create_task(team, "remove_snapshot", "remove_snapshot.py", [str(team), name])
+    return create_task(team, "remove_snapshot", "remove_snapshot.py", [str(team), str(vm), name])
+
 
 def cmd_reboot_vm(team, args):
-    return create_task(team, "reboot_vm", "reboot_vm.py", [str(team)])
+    vm = int(args[0])
+    return create_task(team, "reboot_vm", "reboot_vm.py", [str(team), str(vm)])
+
 
 def cmd_help(team, args):
     help_msg = """
-  create_vm                        - create vm
-  get_team_openvpn_config          - get openvpn config for your team members
-  get_vm_info                      - get info about vm
-  connect_vm_to_game_network       - connect vm to the game network
-  disconnect_vm_from_game_network  - disconnect vm from the game network
-  take_snapshot <name>             - take a snapshot
-  list_snapshots                   - list snapshots
-  restore_vm_from_snapshot <name>  - restore vm from the snapshot
-  remove_snapshot <name>           - remove a snapshot
-  reboot_vm                        - reboot vm
-  help                             - help
-  man                              - instructions
+  get_team_openvpn_config               - get openvpn config for your team members
+  list_vms                              - list available vms
+  create_vm <vm>                        - create vm
+  get_vm_info <vm>                      - get info about vm
+  take_snapshot <vm> <name>             - take a snapshot
+  list_snapshots <vm>                   - list snapshots
+  restore_vm_from_snapshot <vm> init    - restore vm to the initial state
+  restore_vm_from_snapshot <vm> <name>  - restore vm from the snapshot
+  remove_snapshot <vm> <name>           - remove a snapshot
+  reboot_vm <vm>                        - reboot vm
+  open_vm <vm>                          - connect vm to the game network
+  isolate_vm <vm>                       - isolate vm from the game network
+  help                                  - help
+  man                                   - instructions
 """.strip("\n")
 
     return "200 Ok", {"result": "ok", "msg": help_msg, "team": team}
@@ -305,43 +358,39 @@ def cmd_help(team, args):
 def cmd_man(team, args):
     man_msg = """
   Step 1: 
-    Create the vulnerable vm
-      # create_vm
+    List available vms
+      # list_vms
   Step 2:
-    Get the vpn config: 
+    Get the vpn config:
       # get_team_openvpn_config
-    Save as ctfe.ovpn
+    Save as game.ovpn.
   Step 3:
     Give the vpn config to every team member and run openvpn:
-      Linux and MacOS: openvpn ctfe.ovpn
-      Windows: right-click on ctfe.ovpn -> Start OpenVPN on this config file
+      Linux and MacOS: openvpn game.ovpn
+      Windows: right-click on game.ovpn -> Start OpenVPN on this config file
     Of course, they have to have OpenVPN installed
   Step 4:
-    Connect to vulnerable vm using ssh client: 
-      # get_vm_info
+    Get ip and credentials:
+      # get_vm_info <vm>
+    Connect to vulnerable vm using ssh client.
   Step 5:
     After initial setup, make your first vm snapshot, so you can recover to
     that saved state later:
-    # take_snapshot <name>
+    # take_snapshot <vm> <name>
   Step 6:
-    Connect vm network to the game network: 
-      # connect_vm_to_game_network
-    Now other teams and checksystem are able to access the vm.
-    Also now, you should be able to access other teams and checksystem 
-    (if the game network is opened, of course)
-  Step 7:
     Have a nice game!
 
   If something goes wrong, use these commands:
-    # reboot_vm
-    # list_snapshots -> restore_vm_from_snapshot <name>
+    # reboot_vm <vm>
+    # list_snapshots <vm> -> restore_vm_from_snapshot <vm> <name>
   If something goes terribly wrong, use this command:
-    # disconnect_vm_from_game_network
-  After this command you will be able to fallback to usual (non-cloud) setup.
-  The access to vuln image should remain and you can reconnect it again with
-    # connect_vm_to_game_network""".lstrip("\n")
+    # isolate_vm <vm>
+  The access to vuln images should remain from your network only.
+  To open the network for vm again, execute:
+    # open_vm <vm>""".lstrip("\n")
 
     return "200 Ok", {"result": "ok", "msg": man_msg, "team": team}
+
 
 def cmd_poll(team, args):
     task_name = args[0]
@@ -432,40 +481,64 @@ def application(environ, start_response):
         return [json.dumps({"result": "bad request",}).encode()]
 
     CMDS = {
-        "create_vm": (cmd_create_vm, 0, False),
-        "get_team_openvpn_config": (cmd_get_team_openvpn_config, 0, True),
-        "get_vm_info": (cmd_get_vm_info, 0, False),
-        "connect_vm_to_game_network": (cmd_connect_vm_to_game_network, 0, True),
-        "disconnect_vm_from_game_network": (cmd_disconnect_vm_from_game_network, 0, True),
-        "take_snapshot": (cmd_take_snapshot, 1, True),
-        "list_snapshots": (cmd_list_snapshots, 0, True),
-        "restore_vm_from_snapshot": (cmd_restore_vm_from_snapshot, 1, True),
-        "remove_snapshot": (cmd_remove_snapshot, 1, True),
-        "reboot_vm": (cmd_reboot_vm, 0, True),
-        "help": (cmd_help, 0, False),
-        "?": (cmd_help, 0, False),
-        "man": (cmd_man, 0, False),
-        "oblaka": (cmd_oblaka, 0, False),
-        "login": (cmd_login, 0, False),
-        "poll": (cmd_poll, 1, False),
+        "list_vms": (cmd_list_vms, 0, False, False),
+        "create_vm": (cmd_create_vm, 1, True, False),
+        "get_team_openvpn_config": (cmd_get_team_openvpn_config, 0, False, True),
+        "get_team_wireguard_config": (cmd_get_team_wireguard_config, 0, False, True),
+        "get_vm_info": (cmd_get_vm_info, 1, True, False),
+        "open_vm": (cmd_open_vm, 0, True, True),
+        "isolate_vm": (cmd_isolate_vm, 0, True, True),
+        "take_snapshot": (cmd_take_snapshot, 2, True, True),
+        "list_snapshots": (cmd_list_snapshots, 1, True, True),
+        "restore_vm_from_snapshot": (cmd_restore_vm_from_snapshot, 2, True, True),
+        "remove_snapshot": (cmd_remove_snapshot, 2, True, True),
+        "reboot_vm": (cmd_reboot_vm, 1, True, True),
+        "help": (cmd_help, 0, False, False),
+        "?": (cmd_help, 0, False, False),
+        "man": (cmd_man, 0, False, False),
+        "oblaka": (cmd_oblaka, 0, False, False),
+        "login": (cmd_login, 0, False, False),
+        "poll": (cmd_poll, 1, False, False),
     }
 
     if cmd not in CMDS:
         start_response("422 Bad Request", RESP_HEADERS)
         return [json.dumps({"result": "error", "msg": "bad command, type 'help' for help"}).encode()]
 
-    handler, min_args_num, check_vm_created = CMDS[cmd]
+    handler, min_args_num, first_arg_is_vm, check_vm_created = CMDS[cmd]
 
-    if check_vm_created:
-        net_deploy_state = open("%s/team%d/net_deploy_state" % (DB_PATH, team)).read().strip()
-        image_deploy_state = open("%s/team%d/image_deploy_state" % (DB_PATH, team)).read().strip()
-        if net_deploy_state != "READY" or image_deploy_state != "RUNNING":
-            start_response("422 Not yet", RESP_HEADERS)
-            return [json.dumps({"result": "not yet", "msg": "ERROR: create vm first"}).encode()]
+    if len(args) < min_args_num:
+        insufficient_args_msg = "insufficient arguments, type 'help' for help"
+        start_response("422 Bad Request", RESP_HEADERS)
+        return [json.dumps({"result": "error", "msg": insufficient_args_msg}).encode()]
+
 
     if len(args) < min_args_num:
         start_response("422 Bad Request", RESP_HEADERS)
         return [json.dumps({"result": "error", "msg": "insufficient arguments, type 'help' for help"}).encode()]
+
+    if first_arg_is_vm:
+        vm_arg = args[0]
+
+        if not re.fullmatch(r"[0-9a-zA-Z_]+", vm_arg):
+            start_response("422 Bad Request", RESP_HEADERS)
+            return [json.dumps({"result": "bad vm name"}).encode()]
+
+        vms = get_available_and_visible_vms()
+        if vm_arg not in vms:
+            start_response("422 Bad Request", RESP_HEADERS)
+            return [json.dumps({"result": "no such vm"}).encode()]
+        vm = int(vms[vm_arg])
+
+        if check_vm_created:
+            net_deploy_state = open("%s/team%d/net_deploy_state" % (DB_PATH, team)).read().strip()
+            image_deploy_state = open("%s/team%d/serv%d_image_deploy_state" % (DB_PATH, team, vm)).read().strip()
+            if net_deploy_state != "READY" or image_deploy_state != "RUNNING":
+                start_response("422 Not yet", RESP_HEADERS)
+                return [json.dumps({"result": "not yet", "msg": "ERROR: vm is not created yet"}).encode()]
+
+        # convert first arg to the vm number
+        args[0] = vm
 
     status, ans = handler(team, args)
     print("cmd: team %d, %s -> %s" % (team, " ".join(map(str,[cmd] +  args)), status), file=sys.stderr)
@@ -473,3 +546,4 @@ def application(environ, start_response):
     # print(cmd, args, file=sys.stderr)
     start_response(status, RESP_HEADERS)
     return [json.dumps(ans).encode()]
+
