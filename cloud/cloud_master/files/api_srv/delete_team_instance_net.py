@@ -12,10 +12,12 @@ import os
 import traceback
 
 import do_api
+from do_settings import DOMAIN, CLOUD_FOR_DNS
+from do_tokens import DO_TOKENS
 from cloud_common import (# get_cloud_ip,
-                          log_progress, call_unitl_zero_exit, # untake_cloud_ip,
-                          SSH_OPTS, SSH_DO_OPTS, # SSH_YA_OPTS,
-                          DOMAIN)
+                          log_progress, call_unitl_zero_exit, get_cloud_name,
+                          # untake_cloud_ip, SSH_OPTS, SSH_DO_OPTS, SSH_YA_OPTS,
+                          )
 
 
 TEAM = int(sys.argv[1])
@@ -33,6 +35,14 @@ def main():
         return 1
 
     net_state = open("db/team%d/net_deploy_state" % TEAM).read().strip()
+
+    cloud_name = get_cloud_name(TEAM)
+    if not cloud_name:
+        log_stderr("no cloud_name, exiting")
+        return 1
+
+    token = DO_TOKENS[cloud_name]
+    dns_token = DO_TOKENS[CLOUD_FOR_DNS]
 
     droplet_id = None
     if net_state == "READY":
@@ -57,13 +67,13 @@ def main():
 
     if net_state == "DNS_REGISTERED":
         domain_ids = do_api.get_domain_ids_by_hostname(
-            DNS_NAME, DOMAIN, print_warning_on_fail=True)
+            dns_token, DNS_NAME, DOMAIN, print_warning_on_fail=True)
         if domain_ids is None:
             log_stderr("failed to get domain ids, exiting")
             return 1
 
         for domain_id in domain_ids:
-            if not do_api.delete_domain_record(domain_id, DOMAIN):
+            if not do_api.delete_domain_record(dns_token, domain_id, DOMAIN):
                 log_stderr("failed to delete domain %d, exiting" % domain_id)
                 return 1
 
@@ -71,7 +81,7 @@ def main():
         open("db/team%d/net_deploy_state" % TEAM, "w").write(net_state)
 
     if net_state == "DO_LAUNCHED":
-        do_ids = do_api.get_ids_by_vmname(VM_NAME)
+        do_ids = do_api.get_ids_by_vmname(token, VM_NAME)
 
         if do_ids is None:
             log_stderr("failed to get vm ids, exiting")
@@ -81,7 +91,7 @@ def main():
             log_stderr("warinig: more than 1 droplet to be deleted")
 
         for do_id in do_ids:
-            if not do_api.delete_vm_by_id(do_id):
+            if not do_api.delete_vm_by_id(token, do_id):
                 log_stderr("failed to delete droplet %d, exiting" % do_id)
                 return 1
 
@@ -89,9 +99,9 @@ def main():
         open("db/team%d/net_deploy_state" % TEAM, "w").write(net_state)
 
     if net_state == "NOT_STARTED":
-        image_state = open("db/team%d/image_deploy_state" % TEAM).read().strip()
-        if image_state == "NOT_STARTED":
-            log_stderr("returning slot to cloud")
+        # image_state = open("db/team%d/image_deploy_state" % TEAM).read().strip()
+        # if image_state == "NOT_STARTED":
+        #     log_stderr("returning slot to cloud")
             # untake_cloud_ip(TEAM)
         return 0
     return 1

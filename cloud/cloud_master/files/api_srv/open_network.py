@@ -9,8 +9,9 @@ import os
 import traceback
 
 import do_api
-from cloud_common import (log_progress, call_unitl_zero_exit, #get_cloud_ip, 
-                          SSH_OPTS, SSH_DO_OPTS, ROUTER_HOST, # SSH_YA_OPTS
+from do_tokens import DO_TOKENS
+from cloud_common import (log_progress, call_unitl_zero_exit, get_cloud_name,
+                          SSH_OPTS, SSH_DO_OPTS, # ROUTER_HOST, SSH_YA_OPTS
                           )
 
 
@@ -49,7 +50,13 @@ def main():
 
     if team_state == "MIDDLE_STATE":
         if ip is None:
-            ip = do_api.get_ip_by_vmname(ROUTER_VM_NAME)
+            cloud_name = get_cloud_name(TEAM)
+            if not cloud_name:
+                log_stderr("no cloud_name, exiting")
+                return 1
+            token = DO_TOKENS[cloud_name]
+
+            ip = do_api.get_ip_by_vmname(token, ROUTER_VM_NAME)
             if ip is None:
                 log_stderr("no ip, exiting")
                 return 1

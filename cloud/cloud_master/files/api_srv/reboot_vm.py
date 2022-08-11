@@ -9,27 +9,37 @@ import os
 import traceback
 
 import do_api
-from cloud_common import (log_progress, call_unitl_zero_exit, # get_cloud_ip,
+from do_tokens import DO_TOKENS
+from cloud_common import (log_progress, call_unitl_zero_exit, get_cloud_name,
+                          get_image_name,
                           SSH_OPTS, # SSH_YA_OPTS
                          )
 
 TEAM = int(sys.argv[1])
+VMNUM = int(sys.argv[2])
 
-IMAGE_VM_NAME = "team%d" % TEAM
 
 def log_stderr(*params):
     print("Team %d:" % TEAM, *params, file=sys.stderr)
 
 
 def main():
-    image_state = open("db/team%d/image_deploy_state" % TEAM).read().strip()
+    image_state = open("db/team%d/serv%d_image_deploy_state" % (TEAM, VMNUM)).read().strip()
 
     if image_state == "NOT_STARTED":
         print("msg: ERR, vm is not started")
         return 1
 
     if image_state == "RUNNING":
-        result = do_api.reboot_vm_by_vmname(IMAGE_VM_NAME)
+        cloud_name = get_cloud_name(TEAM)
+        if not cloud_name:
+            log_stderr("no cloud_name, exiting")
+            return 1
+
+        token = DO_TOKENS[cloud_name]
+
+
+        result = do_api.reboot_vm_by_vmname(token, get_image_name(TEAM, VMNUM))
 
         if not result:
             log_stderr("failed to reboot")

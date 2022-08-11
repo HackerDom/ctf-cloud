@@ -13,6 +13,7 @@ import traceback
 import time
 import re
 
+from cloud_common import get_available_services, get_service_name_by_num, get_image_name
 
 def log_stderr(*params):
     print(*params, file=sys.stderr)
@@ -25,6 +26,7 @@ def log_team(team, *params):
 def get_vm_states():
     net_states = {}
     image_states = {}
+    open_states = {}
     team_states = {}
 
     for filename in os.listdir("db"):
@@ -36,18 +38,35 @@ def get_vm_states():
             net_state = open("db/%s/net_deploy_state" % (filename)).read().strip()
             net_states[team] = net_state
             
-            image_state = open("db/%s/image_deploy_state" % (filename)).read().strip()
-            image_states[team] = image_state
+            try:
+                for vm, vmnum in get_available_services().items():
+                    image_state = open("db/%s/serv%d_image_deploy_state" %
+                                       (filename, vmnum)).read().strip()
+                    if team not in image_states:
+                        image_states[team] = {}
+                    image_states[team][vmnum] = image_state
+            except FileNotFoundError:
+                log_team(team, "failed to load states")
+
+            try:
+                for vm, vmnum in get_available_services().items():
+                    open_state = open("db/%s/serv%d_open_state" %
+                                       (filename, vmnum)).read().strip()
+                    if team not in open_states:
+                        open_states[team] = {}
+                    open_states[team][vmnum] = open_state
+            except FileNotFoundError:
+                log_team(team, "failed to load open states")
 
             team_state = open("db/%s/team_state" % (filename)).read().strip()
             team_states[team] = team_state
         except FileNotFoundError: 
             log_team(team, "failed to load states")
-    return net_states, image_states, team_states
+    return net_states, image_states, open_states, team_states
 
 
-def get_cloud_ips():
-    cloud_ips = {}
+def get_cloud_names():
+    cloud_names = {}
 
     for filename in os.listdir("db"):
         m = re.fullmatch(r"team([0-9]+)", filename)
@@ -56,30 +75,40 @@ def get_cloud_ips():
         team = int(m.group(1))
 
         try:
-            cloud_ip = open("db/%s/cloud_ip" % (filename)).read().strip()
-            cloud_ips[team] = cloud_ip
+            cloud_name = open("db/%s/cloud_name" % filename).read().strip()
+            cloud_names[team] = cloud_name
 
         except FileNotFoundError:
             # it is ok, for undeployed VMs
             pass
-    return cloud_ips
+    return cloud_names
 
 
 
 
 def main():
-    net_states, image_states, team_states = get_vm_states()
-    cloud_ips = get_cloud_ips()
+    net_states, image_states, open_states, team_states = get_vm_states()
+    cloud_names = get_cloud_names()
 
-    assert net_states.keys() == image_states.keys() == team_states.keys()
+    assert net_states.keys() == image_states.keys() == open_states.keys() == team_states.keys()
     teams = list(net_states.keys())
 
+    service_ids = sorted(list({s for k in image_states.values() for s in k}))
 
-    print("%4s %16s %16s %16s %s" % ("TEAM", "NET_STATE", "IMAGE_STATE", "TEAM_STATE", "CLOUD_IP"))
-    for team in sorted(teams):
-        if net_states[team] == "NOT_STARTED" and image_states[team] == "NOT_STARTED":
-            continue
-        print("%4d %16s %16s %16s %s" % (team, net_states[team], image_states[team], team_states[team], cloud_ips.get(team, "NO")))
+    print("%4s %7s %16s %16s %16s %16s %s" % (
+        "TEAM", "SERVICE", "SERVICE_NAME", "NET_STATE", "IMAGE_STATE", "TEAM_STATE", "CLOUD"))
+    for service_id in service_ids:
+        for team in sorted(teams):
+            service_state = image_states.get(team, {}).get(service_id, "")
+            if net_states[team] == "NOT_STARTED" and service_state == "NOT_STARTED":
+                continue
+            service_name = get_service_name_by_num(service_id)
+            team_state = team_states[team]
+            if open_states.get(team, {}).get(service_id, "") == "CLOSED":
+                team_state = "ISOLATED"
+            print("%4d %7d %16s %16s %16s %16s %s" % (
+                team, service_id, service_name, net_states[team],
+                service_state, team_state, cloud_names.get(team, "NO")))
             
     return 0
     

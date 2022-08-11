@@ -10,13 +10,17 @@ import traceback
 import re
 
 import do_api
-from cloud_common import (log_progress, call_unitl_zero_exit, # get_cloud_ip,
-                          SSH_OPTS, # SSH_YA_OPTS
+from do_tokens import DO_TOKENS
+from do_settings import CLOUDS
+from cloud_common import (log_progress, call_unitl_zero_exit, get_cloud_name,
+                          get_image_name, get_snapshot_prefix,
+                          get_service_name_by_num, SSH_OPTS, # SSH_YA_OPTS
                          )
 
 TEAM = int(sys.argv[1])
-NAME = sys.argv[2]
-IMAGE_VM_NAME = "team%d" % TEAM
+VMNUM = int(sys.argv[2])
+NAME = sys.argv[3]
+#IMAGE_VM_NAME = "team%d" % TEAM
 
 
 def log_stderr(*params):
@@ -28,14 +32,22 @@ def main():
         print("msg: ERR, name validation error")
         return 1
 
-    image_state = open("db/team%d/image_deploy_state" % TEAM).read().strip()
+    image_state = open("db/team%d/serv%d_image_deploy_state" % (TEAM, VMNUM)).read().strip()
 
     if image_state == "NOT_STARTED":
         print("msg: ERR, vm is not started")
         return 1
 
     if image_state == "RUNNING":
-        vm_ids = do_api.get_ids_by_vmname(IMAGE_VM_NAME)
+        cloud_name = get_cloud_name(TEAM)
+        if not cloud_name:
+            log_stderr("no cloud_name, exiting")
+            return 1
+
+        token = DO_TOKENS[cloud_name]
+
+
+        vm_ids = do_api.get_ids_by_vmname(token, get_image_name(TEAM, VMNUM))
         if not vm_ids:
             log_stderr("failed to find vm")
             return 1
@@ -46,30 +58,42 @@ def main():
 
         vm_id = list(vm_ids)[0]
 
+        snapshot_id = None
+        if NAME == "init":
+            cloud = CLOUDS[cloud_name]
 
-        SNAPSHOT_NAME = IMAGE_VM_NAME + "-" + NAME
+            service_name = get_service_name_by_num(VMNUM)
+            if not service_name:
+                print("msg:", "internal error: service is not open")
+                return 1
 
-        snapshots = do_api.list_snapshots()
+            if service_name not in cloud["vulnimages"]:
+                print("msg:", "internal error: no such service")
+                return 1
 
-        ids = []
+            snapshot_id = int(cloud["vulnimages"][service_name])
+        else:
+            SNAPSHOT_NAME = get_snapshot_prefix(TEAM, VMNUM) + NAME
+            snapshots = do_api.list_snapshots(token)
 
-        for snapshot in snapshots:
-            if snapshot.get("name", "") != SNAPSHOT_NAME:
-                continue
+            ids = []
 
-            ids.append(int(snapshot["id"]))
+            for snapshot in snapshots:
+                if snapshot.get("name", "") != SNAPSHOT_NAME:
+                    continue
 
-        if not ids:
-            print("msg:", "no such snapshot")
-            return 1
+                ids.append(int(snapshot["id"]))
 
-        if len(ids) > 1:
-            print("msg:", "internal error: too much snapshots")
-            return 1
+            if not ids:
+                print("msg:", "no such snapshot")
+                return 1
 
-        snapshot_id = ids[0]
+            if len(ids) > 1:
+                print("msg:", "internal error: too much snapshots")
+                return 1
+            snapshot_id = ids[0]
 
-        result = do_api.restore_vm_from_snapshot_by_id(vm_id, snapshot_id)
+        result = do_api.restore_vm_from_snapshot_by_id(token, vm_id, snapshot_id)
 
         if not result:
             log_stderr("restore shapshot failed")

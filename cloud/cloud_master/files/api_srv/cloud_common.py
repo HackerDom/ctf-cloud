@@ -8,11 +8,9 @@ import sys
 import time
 import os
 import shutil
+import re
 
-DOMAIN = "cloud.ructf.org"
-
-# change me before the game
-ROUTER_HOST = "vpn.ructfe.org"
+from do_settings import DO_SSH_ID_FILE
 
 SSH_OPTS = [
     "-o", "StrictHostKeyChecking=no",
@@ -27,7 +25,7 @@ SSH_OPTS = [
 SSH_DO_OPTS = SSH_OPTS + [
     "-o", "Port=2222",
     "-o", "User=root",
-    "-o", "IdentityFile=do_deploy_key"
+    "-o", "IdentityFile=%s" % DO_SSH_ID_FILE
 ]
 
 SSH_YA_OPTS = SSH_OPTS + [
@@ -45,6 +43,20 @@ SSH_YA_OPTS = SSH_OPTS + [
 #         os.remove("db/team%d/cloud_ip" % team)
 #     except FileNotFoundError:
 #         return
+
+def get_cloud_name(team):
+    try:
+        return open("db/team%d/cloud_name" % team).read().strip()
+    except FileNotFoundError as e:
+        return None
+
+
+def put_cloud_name(team, cloud_name):
+    open("db/team%d/cloud_name" % team, "w").write(cloud_name)
+
+
+# def unput_cloud_name(team):
+#     os.remove("db/team%d/cloud_name" % team)
 
 
 # def take_cloud_ip(team):
@@ -69,11 +81,6 @@ SSH_YA_OPTS = SSH_OPTS + [
 #     return None
 
 
-# def get_cloud_ip(team):
-#     try:
-#         return open("db/team%d/cloud_ip" % team).read().strip()
-#     except FileNotFoundError as e:
-#         return None
 
 
 def log_progress(*params):
@@ -94,3 +101,66 @@ def call_unitl_zero_exit(params, redirect_out_to_err=True, attempts=60, timeout=
         return True
 
     return None
+
+def get_available_services(only=None):
+    try:
+        ret = {}
+        for line in open("db/services.txt"):
+            line = line.strip()
+            m = None
+            if only == "visible":
+                m = re.fullmatch(r"([0-9a-zA-Z_]+)+\s+(\d+)\s*(?:\+)", line)
+            elif only == "invisible":
+                m = re.fullmatch(r"([0-9a-zA-Z_]+)+\s+(\d+)\s*(?:\-)", line)
+            elif only is None:
+                m = re.fullmatch(r"([0-9a-zA-Z_]+)\s+(\d+)\s*(?:\+|\-)", line)
+            else:
+                raise Exception("Internal error: bad param for get_available_services")
+
+            if not m:
+                continue
+            vm, vm_number = m.groups()
+            ret[vm] = int(vm_number)
+        return ret
+    except (OSError, ValueError):
+        return {}
+
+
+def get_service_name_by_num(num):
+    if list(get_available_services().values()).count(num) != 1:
+        return ""
+
+    for k, v in get_available_services().items():
+        if v == num:
+            return k
+    return ""
+
+def get_image_name(team, num):
+    # cloud_name = get_cloud_name(team)
+    # if not cloud_name:
+    #     raise Exception("No image name")
+
+    service_name = get_service_name_by_num(num)
+    if not service_name:
+        raise Exception("No service with this num, edit services.txt")
+
+    # the underscore is bad character for image name
+    service_name = service_name.replace("_", "-")
+
+    if not re.fullmatch(r"[a-z0-9-]+", service_name):
+        raise Exception("Service has bad name")
+
+    return "team%d-%s" % (team, service_name)
+
+def get_snapshot_prefix(team, num):
+    service_name = get_service_name_by_num(num)
+    if not service_name:
+        raise Exception("No service with this num, edit services.txt")
+
+    # the hyphen is bad character for snapshot name
+    service_name = service_name.replace("-", "_")
+
+    if not re.fullmatch(r"[a-z0-9_]+", service_name):
+        raise Exception("Service has bad name")
+
+    return "team%d-%s-" % (team, service_name)

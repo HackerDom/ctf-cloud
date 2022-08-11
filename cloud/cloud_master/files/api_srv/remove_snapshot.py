@@ -10,13 +10,15 @@ import traceback
 import re
 
 import do_api
-from cloud_common import (log_progress, call_unitl_zero_exit, #get_cloud_ip,
-                          SSH_OPTS #, SSH_YA_OPTS
+from do_tokens import DO_TOKENS
+from cloud_common import (log_progress, call_unitl_zero_exit, get_cloud_name,
+                          get_image_name, get_snapshot_prefix, SSH_OPTS #, SSH_YA_OPTS
                           )
 
 TEAM = int(sys.argv[1])
-NAME = sys.argv[2]
-IMAGE_VM_NAME = "team%d" % TEAM
+VMNUM = int(sys.argv[2])
+NAME = sys.argv[3]
+# IMAGE_VM_NAME = "team%d" % TEAM
 
 def log_stderr(*params):
     print("Team %d:" % TEAM, *params, file=sys.stderr)
@@ -27,14 +29,24 @@ def main():
         print("msg: ERR, name validation error")
         return 1
 
-    SNAPSHOT_NAME = IMAGE_VM_NAME + "-" + NAME
+    if NAME == "init":
+        print("msg: ERR, init snapshot is not deletable")
+        return 1
 
-    snapshots = do_api.list_snapshots()
+    cloud_name = get_cloud_name(TEAM)
+    if not cloud_name:
+        log_stderr("no cloud_name, exiting")
+        return 1
+
+    token = DO_TOKENS[cloud_name]
+
+    snapshot_name = get_snapshot_prefix(TEAM, VMNUM) + NAME
+    snapshots = do_api.list_snapshots(token)
 
     ids = []
 
     for snapshot in snapshots:
-        if snapshot.get("name", "") != SNAPSHOT_NAME:
+        if snapshot.get("name", "") != snapshot_name:
             continue
 
         ids.append(int(snapshot["id"]))
@@ -49,12 +61,11 @@ def main():
 
     snapshot_id = ids[0]
 
-    result = do_api.delete_snapshot(snapshot_id)
+    result = do_api.delete_snapshot(token, snapshot_id)
 
     if not result:
         log_stderr("failed to delete snapshot")
         return 1
-
 
     # image_state = open("db/team%d/image_deploy_state" % TEAM).read().strip()
 

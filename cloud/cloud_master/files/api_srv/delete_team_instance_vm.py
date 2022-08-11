@@ -12,12 +12,14 @@ import os
 import traceback
 
 import do_api
-from cloud_common import (log_progress, call_unitl_zero_exit, # get_cloud_ip, untake_cloud_ip, 
+from do_tokens import DO_TOKENS
+from cloud_common import (log_progress, call_unitl_zero_exit, get_cloud_name, 
+                          get_image_name, # unput_cloud_name,
                           SSH_OPTS #, SSH_YA_OPTS
                           )
 
 TEAM = int(sys.argv[1])
-IMAGE_VM_NAME = "team%d" % TEAM
+VMNUM = int(sys.argv[2])
 
 
 def log_stderr(*params):
@@ -30,35 +32,38 @@ def main():
         log_stderr("switch team to non cloud first")
         return 1
 
-    image_state = open("db/team%d/image_deploy_state" % TEAM).read().strip()
+    image_state = open("db/team%d/serv%d_image_deploy_state" % (TEAM, VMNUM)).read().strip()
 
     if image_state == "RUNNING":
-        #cloud_ip = get_cloud_ip(TEAM)
-        #if not cloud_ip:
-            #log_stderr("no cloud_ip ip, exiting")
-            #return 1
+        cloud_name = get_cloud_name(TEAM)
+        if not cloud_name:
+            log_stderr("no cloud_name, exiting")
+            return 1
+
+        token = DO_TOKENS[cloud_name]
 
         #cmd = ["sudo", "/cloud/scripts/remove_vm.sh", str(TEAM)]
         #ret = call_unitl_zero_exit(["ssh"] + SSH_YA_OPTS + [cloud_ip] + cmd)
         #if not ret:
             #log_stderr("failed to remove team vm")
             #return 1
-        do_ids = do_api.get_ids_by_vmname(IMAGE_VM_NAME)
+        do_ids = do_api.get_ids_by_vmname(token, get_image_name(TEAM, VMNUM))
 
         if do_ids is None:
             log_stderr("failed to get vm ids, exiting")
             return 1
 
         if len(do_ids) > 1:
-            log_stderr("warinig: more than 1 droplet to be deleted")
+            log_stderr("warning: more than 1 droplet to be deleted")
+            return 1
 
         for do_id in do_ids:
-            if not do_api.delete_vm_by_id(do_id):
+            if not do_api.delete_vm_by_id(token, do_id):
                 log_stderr("failed to delete droplet %d, exiting" % do_id)
                 return 1
 
         image_state = "NOT_STARTED"
-        open("db/team%d/image_deploy_state" % TEAM, "w").write(image_state)
+        open("db/team%d/serv%d_image_deploy_state" % (TEAM, VMNUM), "w").write(image_state)
 
     if image_state == "NOT_STARTED":
         net_state = open("db/team%d/net_deploy_state" % TEAM).read().strip()

@@ -7,15 +7,7 @@ import time
 import json
 import sys
 
-from do_token import TOKEN
-
-
 VERBOSE = True
-
-HEADERS = {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer %s" % TOKEN,
-}
 
 
 def log(*params):
@@ -23,7 +15,26 @@ def log(*params):
         print(*params, file=sys.stderr)
 
 
-def get_all_vms(attempts=5, timeout=10):
+def call_do_api(token, method, endpoint, data=None):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer %s" % token,
+    }
+
+    resp = requests.request(method, endpoint, headers=headers, data=data)
+    if not str(resp.status_code).startswith("2"):
+        log(resp.status_code, resp.headers, resp.text)
+        raise Exception("bad status code %d" % resp.status_code)
+
+    if not resp.text:
+        return {}
+
+    return json.loads(resp.text)
+
+
+
+
+def get_all_vms(token, attempts=5, timeout=10):
     vms = {}
     url = "https://api.digitalocean.com/v2/droplets?per_page=200"
 
@@ -31,12 +42,7 @@ def get_all_vms(attempts=5, timeout=10):
 
     while True:
         try:
-            resp = requests.get(url, headers=HEADERS)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-
-            data = json.loads(resp.text)
+            data = call_do_api(token, "get", url)
 
             for droplet in data["droplets"]:
                 vms[droplet["id"]] = droplet
@@ -46,7 +52,6 @@ def get_all_vms(attempts=5, timeout=10):
                 url = data["links"]["pages"]["next"]
             else:
                 break
-
         except Exception as e:
             log("get_all_vms trying again %s" % (e,))
             cur_attempt += 1
@@ -56,10 +61,10 @@ def get_all_vms(attempts=5, timeout=10):
     return list(vms.values())
 
 
-def get_ids_by_vmname(vm_name):
+def get_ids_by_vmname(token, vm_name):
     ids = set()
 
-    droplets = get_all_vms()
+    droplets = get_all_vms(token)
     if droplets is None:
         return None
 
@@ -69,8 +74,8 @@ def get_ids_by_vmname(vm_name):
     return ids
 
 
-def check_vm_exists(vm_name):
-    droplets = get_all_vms()
+def check_vm_exists(token, vm_name):
+    droplets = get_all_vms(token)
     if droplets is None:
         return None
 
@@ -80,7 +85,7 @@ def check_vm_exists(vm_name):
     return False
 
 
-def create_vm(vm_name, image, ssh_keys, vpc_uuid=None,
+def create_vm(token, vm_name, image, ssh_keys, vpc_uuid=None,
               region="ams3", size="s-1vcpu-2gb", tag="vm",
               user_data="#!/bin/bash\n\n",
               attempts=10, timeout=20):
@@ -103,13 +108,10 @@ def create_vm(vm_name, image, ssh_keys, vpc_uuid=None,
 
             log("creating new")
             url = "https://api.digitalocean.com/v2/droplets"
-            resp = requests.post(url, headers=HEADERS, data=data)
-            print(resp.text)
-            if resp.status_code not in [200, 201, 202]:
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
 
-            droplet_id = json.loads(resp.text)["droplet"]["id"]
+            data = call_do_api(token, "post", url, data)
+            droplet_id = data["droplet"]["id"]
+
             return droplet_id
         except Exception as e:
             log("create_vm trying again %s" % (e,))
@@ -117,15 +119,12 @@ def create_vm(vm_name, image, ssh_keys, vpc_uuid=None,
     return None
 
 
-def delete_vm_by_id(droplet_id, attempts=10, timeout=20):
+def delete_vm_by_id(token, droplet_id, attempts=10, timeout=20):
     for i in range(attempts):
         try:
             log("deleting droplet")
             url = "https://api.digitalocean.com/v2/droplets/%d" % droplet_id
-            resp = requests.delete(url, headers=HEADERS)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
+            call_do_api(token, "delete", url)
             return True
         except Exception as e:
             log("delete_vm_by_id trying again %s" % (e,))
@@ -133,12 +132,11 @@ def delete_vm_by_id(droplet_id, attempts=10, timeout=20):
     return False
 
 
-def get_ip_by_id(droplet_id, attempts=5, timeout=20):
+def get_ip_by_id(token, droplet_id, attempts=5, timeout=20):
     for i in range(attempts):
         try:
             url = "https://api.digitalocean.com/v2/droplets/%d" % droplet_id
-            resp = requests.get(url, headers=HEADERS)
-            data = json.loads(resp.text)
+            data = call_do_api(token, "get", url)
 
             ip = data['droplet']['networks']['v4'][0]['ip_address']
 
@@ -154,10 +152,10 @@ def get_ip_by_id(droplet_id, attempts=5, timeout=20):
     return None
 
 
-def get_ip_by_vmname(vm_name):
+def get_ip_by_vmname(token, vm_name):
     ids = set()
 
-    droplets = get_all_vms()
+    droplets = get_all_vms(token)
     if droplets is None:
         return None
 
@@ -172,22 +170,15 @@ def get_ip_by_vmname(vm_name):
     if not ids:
         return None
 
-    return get_ip_by_id(list(ids)[0])
+    return get_ip_by_id(token, list(ids)[0])
 
 
-def reboot_vm_by_id(droplet_id, attempts=5, timeout=20):
+def reboot_vm_by_id(token, droplet_id, attempts=5, timeout=20):
     for i in range(attempts):
         try:
             url = "https://api.digitalocean.com/v2/droplets/%d/actions" % droplet_id
             data = json.dumps({"type": "power_cycle"})
-
-            resp = requests.post(url, headers=HEADERS, data=data)
-
-            if resp.status_code not in [200, 201, 202]:
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-            # data = json.loads(resp.text)
-
+            call_do_api(token, "post", url, data=data)
             return True
         except Exception as e:
             log("reboot_vm_by_id trying again %s" % (e,))
@@ -196,39 +187,32 @@ def reboot_vm_by_id(droplet_id, attempts=5, timeout=20):
     return None
 
 
-def restore_vm_from_snapshot_by_id(droplet_id, snapshot_id, attempts=5, timeout=20):
-    for i in range(attempts):
-        try:
-            url = "https://api.digitalocean.com/v2/droplets/%d/actions" % droplet_id
-            data = json.dumps({"type": "restore", "image": snapshot_id})
+def reboot_vm_by_vmname(token, vm_name):
+    ids = set()
 
-            resp = requests.post(url, headers=HEADERS, data=data)
+    droplets = get_all_vms(token)
+    if droplets is None:
+        return None
 
-            if resp.status_code not in [200, 201, 202]:
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-            # data = json.loads(resp.text)
+    for droplet in droplets:
+        if droplet["name"] == vm_name:
+            ids.add(droplet['id'])
 
-            return True
-        except Exception as e:
-            log("reboot_vm_by_id trying again %s" % (e,))
-        time.sleep(timeout)
-    log("failed to reboot vm by id")
-    return None
+    if len(ids) > 1:
+        log("warning: there are more than one droplet with name " + vm_name +
+            ", using random :)")
+
+    if not ids:
+        return None
+    return reboot_vm_by_id(token, list(ids)[0])
 
 
-def take_vm_snapshot(droplet_id, snapshot_name, attempts=5, timeout=20):
+def take_vm_snapshot(token, droplet_id, snapshot_name, attempts=5, timeout=20):
     for i in range(attempts):
         try:
             url = "https://api.digitalocean.com/v2/droplets/%d/actions" % droplet_id
             data = json.dumps({"type": "snapshot", "name": snapshot_name})
-
-            resp = requests.post(url, headers=HEADERS, data=data)
-
-            if resp.status_code not in [200, 201, 202]:
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-
+            call_do_api(token, "post", url, data=data)
             return True
         except Exception as e:
             log("reboot_vm_by_id trying again %s" % (e,))
@@ -237,7 +221,7 @@ def take_vm_snapshot(droplet_id, snapshot_name, attempts=5, timeout=20):
     return None
 
 
-def list_snapshots(attempts=4, timeout=5):
+def list_snapshots(token, attempts=4, timeout=5):
     snapshots = {}
     url = ("https://api.digitalocean.com/v2/snapshots?per_page=200")
 
@@ -245,12 +229,7 @@ def list_snapshots(attempts=4, timeout=5):
 
     while True:
         try:
-            resp = requests.get(url, headers=HEADERS)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-
-            data = json.loads(resp.text)
+            data = call_do_api(token, "get", url) # json.loads(resp.text)
             for snapshot in data["snapshots"]:
                 snapshots[snapshot["id"]] = snapshot
 
@@ -269,10 +248,60 @@ def list_snapshots(attempts=4, timeout=5):
     return list(snapshots.values())
 
 
-def reboot_vm_by_vmname(vm_name):
+def restore_vm_from_snapshot_by_id(token, droplet_id, snapshot_id, attempts=5, timeout=20):
+    for i in range(attempts):
+        try:
+            url = "https://api.digitalocean.com/v2/droplets/%d/actions" % droplet_id
+            data = json.dumps({"type": "restore", "image": snapshot_id})
+            call_do_api(token, "post", url, data=data)
+
+            return True
+        except Exception as e:
+            log("reboot_vm_by_id trying again %s" % (e,))
+        time.sleep(timeout)
+    log("failed to reboot vm by id")
+    return None
+
+
+
+def delete_snapshot(token, snapshot_id, attempts=10, timeout=20):
+    for i in range(attempts):
+        try:
+            log("deleting snapshot %s" % snapshot_id)
+            url = ("https://api.digitalocean.com/v2/snapshots" +
+                   "/%d" % snapshot_id)
+            # resp = requests.delete(url, headers=HEADERS)
+            # if not str(resp.status_code).startswith("2"):
+            #     log(resp.status_code, resp.headers, resp.text)
+            #     raise Exception("bad status code %d" % resp.status_code)
+            call_do_api(token, "delete", url)
+            return True
+        except Exception as e:
+            log("delete_snapshot trying again %s" % (e,))
+        time.sleep(timeout)
+    return False
+
+
+def add_tag(token, droplet_id, tag, attempts=5, timeout=20):
+    for i in range(attempts):
+        try:
+            url = "https://api.digitalocean.com/v2/tags/%s/resources" % tag
+            data = json.dumps({"resources":
+                [{"resource_id": str(droplet_id), "resource_type": "droplet"}]})
+            call_do_api(token, "post", url, data=data)
+
+            return True
+        except Exception as e:
+            log("add_tag trying again %s" % (e,))
+        time.sleep(timeout)
+    log("failed to add_tag by id")
+    return None
+
+
+def add_tag_by_vmname(token, vm_name, tag):
     ids = set()
 
-    droplets = get_all_vms()
+    droplets = get_all_vms(token)
     if droplets is None:
         return None
 
@@ -287,10 +316,62 @@ def reboot_vm_by_vmname(vm_name):
     if not ids:
         return None
 
-    return reboot_vm_by_id(list(ids)[0])
+    return add_tag(token, list(ids)[0], tag)
 
 
-def get_all_domain_records(domain, attempts=5, timeout=20):
+
+def remove_tag(token, droplet_id, tag, attempts=5, timeout=20):
+    for i in range(attempts):
+        try:
+            url = "https://api.digitalocean.com/v2/tags/%s/resources" % tag
+            data = json.dumps({"resources":
+                [{"resource_id": str(droplet_id), "resource_type": "droplet"}]})
+            call_do_api(token, "delete", url, data=data)
+
+            return True
+        except Exception as e:
+            log("remove_tag trying again %s" % (e,))
+        time.sleep(timeout)
+    log("failed to remove_tag by id")
+    return None
+
+
+def remove_tag_by_vmname(token, vm_name, tag):
+    ids = set()
+
+    droplets = get_all_vms(token)
+    if droplets is None:
+        return None
+
+    for droplet in droplets:
+        if droplet["name"] == vm_name:
+            ids.add(droplet['id'])
+
+    if len(ids) > 1:
+        log("warning: there are more than one droplet with name " + vm_name +
+            ", using random :)")
+
+    if not ids:
+        return None
+
+    return remove_tag(token, list(ids)[0], tag)
+
+
+# def list_tags(token, attempts=5, timeout=20):
+#     for i in range(attempts):
+#         try:
+#             url = "https://api.digitalocean.com/v2/tags"
+#             print(call_do_api(token, "get", url))
+
+#             return True
+#         except Exception as e:
+#             log("list_tags trying again %s" % (e,))
+#         time.sleep(timeout)
+#     log("failed to list_tags by id")
+#     return None
+
+
+def get_all_domain_records(token, domain, attempts=5, timeout=20):
     records = {}
     url = ("https://api.digitalocean.com/v2/domains/" + domain +
            "/records?per_page=200")
@@ -299,12 +380,7 @@ def get_all_domain_records(domain, attempts=5, timeout=20):
 
     while True:
         try:
-            resp = requests.get(url, headers=HEADERS)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-
-            data = json.loads(resp.text)
+            data = call_do_api(token, "get", url)
             for record in data["domain_records"]:
                 records[record["id"]] = record
 
@@ -323,10 +399,10 @@ def get_all_domain_records(domain, attempts=5, timeout=20):
     return list(records.values())
 
 
-def get_domain_ids_by_hostname(host_name, domain, print_warning_on_fail=False):
+def get_domain_ids_by_hostname(token, host_name, domain, print_warning_on_fail=False):
     ids = set()
 
-    records = get_all_domain_records(domain)
+    records = get_all_domain_records(token, domain)
     if records is None:
         return None
 
@@ -341,7 +417,39 @@ def get_domain_ids_by_hostname(host_name, domain, print_warning_on_fail=False):
     return ids
 
 
-def get_all_vpcs(attempts=5, timeout=20):
+def create_domain_record(token, name, ip, domain, attempts=10, timeout=20):
+    for i in range(attempts):
+        try:
+            data = json.dumps({
+                "type": "A",
+                "name": name,
+                "data": ip,
+                "ttl": 30
+            })
+            url = "https://api.digitalocean.com/v2/domains/%s/records" % domain
+            call_do_api(token, "post", url, data)
+            return True
+        except Exception as e:
+            log("create_domain_record trying again %s" % (e,))
+        time.sleep(timeout)
+    return None
+
+
+def delete_domain_record(token, domain_id, domain, attempts=10, timeout=20):
+    for i in range(attempts):
+        try:
+            log("deleting domain record %d" % domain_id)
+            url = ("https://api.digitalocean.com/v2/domains" +
+                   "/%s/records/%d" % (domain, domain_id))
+            call_do_api(token, "delete", url)
+            return True
+        except Exception as e:
+            log("delete_domain_record trying again %s" % (e,))
+        time.sleep(timeout)
+    return False
+
+
+def get_all_vpcs(token, attempts=5, timeout=20):
     vpcs = {}
     url = ("https://api.digitalocean.com/v2/vpcs?per_page=200")
 
@@ -349,12 +457,7 @@ def get_all_vpcs(attempts=5, timeout=20):
 
     while True:
         try:
-            resp = requests.get(url, headers=HEADERS)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-
-            data = json.loads(resp.text)
+            data = call_do_api(token, "get", url)
             for vpc in data["vpcs"]:
                 vpcs[vpc["id"]] = vpc
 
@@ -373,8 +476,8 @@ def get_all_vpcs(attempts=5, timeout=20):
     return vpcs
 
 
-def get_vpc_by_name(name, print_warning_on_fail=False):
-    vpcs = get_all_vpcs()
+def get_vpc_by_name(token, name, print_warning_on_fail=False):
+    vpcs = get_all_vpcs(token)
     if vpcs is None:
         return None
 
@@ -388,7 +491,7 @@ def get_vpc_by_name(name, print_warning_on_fail=False):
     return None
 
 
-def create_vpc(name, ip_range, region="ams3", attempts=10, timeout=20):
+def create_vpc(token, name, ip_range, region="ams3", attempts=10, timeout=20):
     for i in range(attempts):
         try:
             data = json.dumps({
@@ -397,101 +500,26 @@ def create_vpc(name, ip_range, region="ams3", attempts=10, timeout=20):
                 "ip_range": ip_range
             })
             url = "https://api.digitalocean.com/v2/vpcs"
-            resp = requests.post(url, headers=HEADERS, data=data)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-            return resp.json()["vpc"]["id"]
+            data = call_do_api(token, "post", url, data=data)
+            return data["vpc"]["id"]
         except Exception as e:
             log("create_vpc trying again %s" % (e,))
         time.sleep(timeout)
     return None
 
 
+def get_rate_limit(token):
+    url = "https://api.digitalocean.com/v2/account"
 
-def create_domain_record(name, ip, domain, attempts=10, timeout=20):
-    for i in range(attempts):
-        try:
-            data = json.dumps({
-                "type": "A",
-                "name": name,
-                "data": ip,
-                "ttl": 30
-            })
-            url = "https://api.digitalocean.com/v2/domains/%s/records" % domain
-            resp = requests.post(url, headers=HEADERS, data=data)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-            return True
-        except Exception as e:
-            log("create_domain_record trying again %s" % (e,))
-        time.sleep(timeout)
-    return None
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer %s" % token,
+    }
 
+    resp = requests.get(url, headers=headers)
+    if not str(resp.status_code).startswith("2"):
+        log(resp.status_code, resp.headers, resp.text)
+        raise Exception("bad status code %d" % resp.status_code)
 
-def delete_domain_record(domain_id, domain, attempts=10, timeout=20):
-    for i in range(attempts):
-        try:
-            log("deleting domain record %d" % domain_id)
-            url = ("https://api.digitalocean.com/v2/domains" +
-                   "/%s/records/%d" % (domain, domain_id))
-            resp = requests.delete(url, headers=HEADERS)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-            return True
-        except Exception as e:
-            log("delete_domain_record trying again %s" % (e,))
-        time.sleep(timeout)
-    return False
-
-
-def delete_snapshot(snapshot_id, attempts=10, timeout=20):
-    for i in range(attempts):
-        try:
-            log("deleting snapshot %s" % snapshot_id)
-            url = ("https://api.digitalocean.com/v2/snapshots" +
-                   "/%d" % snapshot_id)
-            resp = requests.delete(url, headers=HEADERS)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-            return True
-        except Exception as e:
-            log("delete_snapshot trying again %s" % (e,))
-        time.sleep(timeout)
-    return False
-
-
-def get_ssh_keys(attempts=5, timeout=10):
-    keys = {}
-    url = "https://api.digitalocean.com/v2/account/keys?per_page=200"
-
-    cur_attempt = 1
-
-    while True:
-        try:
-            resp = requests.get(url, headers=HEADERS)
-            if not str(resp.status_code).startswith("2"):
-                log(resp.status_code, resp.headers, resp.text)
-                raise Exception("bad status code %d" % resp.status_code)
-
-            data = json.loads(resp.text)
-
-            for ssh_key in data["ssh_keys"]:
-                keys[ssh_key["id"]] = ssh_key["name"]
-
-            if ("links" in data and "pages" in data["links"] and
-                                    "next" in data["links"]["pages"]):
-                url = data["links"]["pages"]["next"]
-            else:
-                break
-
-        except Exception as e:
-            log("get_ssh_keys trying again %s" % (e,))
-            cur_attempt += 1
-            if cur_attempt > attempts:
-                return None  # do not return parts of the output
-            time.sleep(timeout)
-    return keys
+    return resp.headers.get("Ratelimit-Remaining"), resp.headers.get("Ratelimit-Reset", -1)
+    
