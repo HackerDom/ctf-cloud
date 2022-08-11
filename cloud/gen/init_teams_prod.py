@@ -5,7 +5,7 @@ import os
 import shutil
 import crypt
 
-N = 768
+N = 512
 
 DB_DIR = "db_prod"
 

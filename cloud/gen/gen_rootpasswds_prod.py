@@ -4,7 +4,8 @@ import sys
 import os
 import secrets
 
-N = 768
+N = 512
+S = 16
 
 def genpass(n=12):
  abc = "abcdefgkmnrtxyzABCDEFGKMNRTXYZ23456789"
@@ -19,6 +20,7 @@ except FileExistsError:
     sys.exit(1)
 
 
-for i in range(1, N):
-    open("passwds_prod/team%d_root_passwd.txt" % i, "w").write(genpass()+"\n")
+for t in range(1, N):
+    for s in range(1, S+1)
+        open("passwds_prod/team%d_serv%d_root_passwd.txt" % (t, s), "w").write(genpass()+"\n")
 

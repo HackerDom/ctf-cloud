@@ -1,7 +1,7 @@
 import os
 import sys
 
-N = 768
+N = 512
 
 SERVER = "team%d.cloud.ructf.org"
 
