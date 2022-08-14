@@ -46,8 +46,8 @@ fi
 echo "Patching inventory.cfg"
 sed -E -i "s/cld-master\.a ansible_host=\S+/vpn.a ansible_host=$IP/" inventory.cfg
 
-echo "Patching cloud_master/files/api_srv/cloud_common.py"
-sed -E -i "s/DOMAIN = \"[0-9a-z.-]+\"/DOMAIN = \"${DOMAIN}\"/" cloud_master/files/api_srv/cloud_common.py
+echo "Patching cloud_master/files/api_srv/do_settings.py"
+sed -E -i "s/DOMAIN = \"[0-9a-z.-]+\"/DOMAIN = \"${DOMAIN}\"/" cloud_master/files/api_srv/do_settings.py
 
 echo "Patching gen/gen_conf_client_entergame_prod.py"
 sed -E -i "s/SERVER = \"team%d.[0-9a-z.-]+\"/SERVER = \"team%d.${DOMAIN}\"/" gen/gen_conf_client_entergame_prod.py
