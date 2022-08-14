@@ -5,12 +5,17 @@
 
 import do_api
 
-def main():
-    snapshots = do_api.list_snapshots()
-    snapshots.sort(key=lambda v: v.get("created_at", 0))
+from do_tokens import DO_TOKENS
 
-    for snapshot in snapshots:
-        print(snapshot["id"], snapshot["name"])
+def main():
+    for token_name, token in DO_TOKENS.items():
+        print(token_name)
+
+        snapshots = do_api.list_snapshots(token)
+        snapshots.sort(key=lambda v: v.get("created_at", 0))
+
+        for snapshot in snapshots:
+            print(snapshot["id"], snapshot["name"])
 
     return 0
 

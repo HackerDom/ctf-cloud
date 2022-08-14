@@ -1,6 +1,11 @@
 import do_api
 
-keys = sorted(do_api.get_ssh_keys().items())
+from do_tokens import DO_TOKENS
 
-for key_id, key_name in keys:
-    print(key_id, key_name)
+for token_name, token in DO_TOKENS.items():
+    print(token_name)
+
+    keys = sorted(do_api.get_ssh_keys(token).items())
+
+    for key_id, key_name in keys:
+        print(key_id, key_name)
