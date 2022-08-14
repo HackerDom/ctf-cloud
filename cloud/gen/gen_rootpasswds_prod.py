@@ -21,6 +21,6 @@ except FileExistsError:
 
 
 for t in range(1, N):
-    for s in range(1, S+1)
+    for s in range(1, S+1):
         open("passwds_prod/team%d_serv%d_root_passwd.txt" % (t, s), "w").write(genpass()+"\n")
 
