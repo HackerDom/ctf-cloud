@@ -484,7 +484,7 @@ def application(environ, start_response):
         "list_vms": (cmd_list_vms, 0, False, False),
         "create_vm": (cmd_create_vm, 1, True, False),
         "get_team_openvpn_config": (cmd_get_team_openvpn_config, 0, False, True),
-        "get_team_wireguard_config": (cmd_get_team_wireguard_config, 0, False, True),
+        #"get_team_wireguard_config": (cmd_get_team_wireguard_config, 0, False, True),
         "get_vm_info": (cmd_get_vm_info, 1, True, False),
         "open_vm": (cmd_open_vm, 0, True, True),
         "isolate_vm": (cmd_isolate_vm, 0, True, True),
